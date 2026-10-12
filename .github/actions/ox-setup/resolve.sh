@@ -5,7 +5,7 @@
 # Writes the resolved pins ("name url#commit" lines) to $RUNNER_TEMP and sets
 # the step outputs key, restore-prefix and pin-file.
 #
-# Key: ox-setup-v1-<os>-<arch>-<ox commit>-<pin list>-<pin commits>-<opam files>
+# Key: ox-setup-v1-<os>-<arch>-<image>-<compiler>-<ox commit>-<pin list>-<pin commits>-<opam files>
 # The restore prefix stops after the pin list, so a run whose siblings moved
 # starts from the last switch built with the same pins and only rebuilds what
 # changed.
@@ -50,7 +50,7 @@ pin_commits=$(sha < "${pin_file}")
 opam_files=$(cd "${WORKDIR}" && find . -maxdepth 1 -name '*.opam' -print0 \
   | sort -z | xargs -0 -r cat | { cat; echo "with-test=${WITH_TEST}"; } | sha)
 
-prefix="ox-setup-v1-${RUNNER_OS:-Linux}-${RUNNER_ARCH:-X64}-$(echo "${COMPILER}" | sha)-${ox_commit:0:12}-${pin_list}-"
+prefix="ox-setup-v1-${RUNNER_OS:-Linux}-${RUNNER_ARCH:-X64}-${ImageOS:-local}-$(echo "${COMPILER}" | sha)-${ox_commit:0:12}-${pin_list}-"
 key="${prefix}${pin_commits}-${opam_files}"
 
 echo "Resolved pins:"
