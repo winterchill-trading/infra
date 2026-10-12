@@ -89,3 +89,14 @@ sims:
     - name: bybit-sim
       port: 3400
       probe: { path: /v5/market/time }
+
+# Host socket and FD collector, one pod per node (host network and PID
+# namespace). Recorders only dial out, so keep the port closed in the
+# node's security group and scrape it from inside the cluster.
+nodeExporter:
+  enabled: true
+  image: quay.io/prometheus/node-exporter:v1.12.1
+  port: 9100
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 64Mi }

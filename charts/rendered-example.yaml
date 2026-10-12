@@ -149,6 +149,28 @@ spec:
       storage: 2Gi
 
 ---
+# Source: winterchill/templates/node-exporter.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-node-exporter
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: node-exporter
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: node-exporter
+  ports:
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+
+---
 # Source: winterchill/templates/recorder-service.yaml
 apiVersion: v1
 kind: Service
@@ -276,6 +298,75 @@ spec:
       port: 3400
       targetPort: http
 
+---
+# Source: winterchill/templates/node-exporter.yaml
+# Host-level socket and FD collector: node_sockstat_*, node_netstat_Tcp_*,
+# node_tcp_connection_states, node_filefd_allocated. Per-container sockets,
+# FDs and RSS come from the kubelet's built-in cAdvisor
+# (/api/v1/nodes/<node>/proxy/metrics/cadvisor: container_sockets,
+# container_file_descriptors, container_memory_rss), so no cAdvisor here.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: winterchill-node-exporter
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: node-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: node-exporter
+    spec:
+      # The host's network namespace is the one whose sockets matter.
+      hostNetwork: true
+      hostPID: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: node-exporter
+          image: quay.io/prometheus/node-exporter:v1.12.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --path.rootfs=/host
+            - --web.listen-address=:9100
+            - --collector.tcpstat
+            - --collector.processes
+          ports:
+            - name: metrics
+              containerPort: 9100
+          readinessProbe:
+            httpGet: { path: /, port: metrics }
+            periodSeconds: 30
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: root
+              mountPath: /host
+              readOnly: true
+              mountPropagation: HostToContainer
+      volumes:
+        - name: root
+          hostPath: { path: / }
+      tolerations:
+        - operator: Exists
 ---
 # Source: winterchill/templates/recorder-deployment.yaml
 apiVersion: apps/v1

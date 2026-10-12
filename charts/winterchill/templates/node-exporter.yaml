@@ -1,0 +1,79 @@
+{{- if .Values.nodeExporter.enabled }}
+# Host-level socket and FD collector: node_sockstat_*, node_netstat_Tcp_*,
+# node_tcp_connection_states, node_filefd_allocated. Per-container sockets,
+# FDs and RSS come from the kubelet's built-in cAdvisor
+# (/api/v1/nodes/<node>/proxy/metrics/cadvisor: container_sockets,
+# container_file_descriptors, container_memory_rss), so no cAdvisor here.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Release.Name }}-node-exporter
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: node-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: node-exporter
+    spec:
+      # The host's network namespace is the one whose sockets matter.
+      hostNetwork: true
+      hostPID: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: node-exporter
+          image: {{ .Values.nodeExporter.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - --path.rootfs=/host
+            - --web.listen-address=:{{ .Values.nodeExporter.port }}
+            - --collector.tcpstat
+            - --collector.processes
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.nodeExporter.port }}
+          readinessProbe:
+            httpGet: { path: /, port: metrics }
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.nodeExporter.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: root
+              mountPath: /host
+              readOnly: true
+              mountPropagation: HostToContainer
+      volumes:
+        - name: root
+          hostPath: { path: / }
+      tolerations:
+        - operator: Exists
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-node-exporter
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: node-exporter
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: node-exporter
+  ports:
+    - name: metrics
+      port: {{ .Values.nodeExporter.port }}
+      targetPort: metrics
+{{- end }}
