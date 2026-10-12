@@ -64,7 +64,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 ${RUNTIME_PACKAGES} \
  && rm -rf /var/lib/apt/lists/* \
- && userdel -r ubuntu 2>/dev/null || true \
+ && { userdel -r ubuntu 2>/dev/null || true; } \
  && useradd -r -u 10001 -m -d /var/lib/service service \
  && install -d -o 10001 -g 10001 "/var/lib/${REPO}"
 COPY --from=build /home/opam/out/service /usr/local/bin/service
