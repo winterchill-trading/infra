@@ -25,7 +25,7 @@ spec:
         runAsUser: 10001
       containers:
         - name: sim
-          image: {{ include "winterchill.image" (dict "root" $ "image" (dict "repository" .name "tag" $.Values.sims.image.tag)) }}
+          image: {{ include "winterchill.image" (dict "root" $ "image" (dict "repository" .name "tag" ($.Values.sims.image.tag | default .tag))) }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           args: ["-port", {{ .port | quote }}, "-seed", {{ $.Values.sims.seed | quote }}]
           ports:

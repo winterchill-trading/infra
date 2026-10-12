@@ -2,13 +2,15 @@
 # See values-dev.yaml for the local profile with simulators.
 
 imageRegistry: ghcr.io/winterchill-trading
+# Image tags are the first 12 characters of the commit the image was built
+# from (the service-images workflow pushes them); `latest` is rejected.
 imagePullPolicy: IfNotPresent
 imagePullSecrets: []
 
 recorder:
   image:
     repository: market-recorder
-    tag: latest
+    tag: ddffef1be979
   # Directory inside the pod holding raw/ and norm/ files (the PVC mount).
   dataDir: /var/lib/market-recorder
   httpPort: 9100
@@ -63,7 +65,7 @@ dayClose:
   enabled: true
   image:
     repository: market-data
-    tag: latest
+    tag: c8121535e357
   # 00:20 UTC, after the day's last files have rolled.
   schedule: "20 0 * * *"
   # Upload the day's parquet/ tables after the close.
@@ -76,17 +78,21 @@ dayClose:
 # Venue simulators, for the dev profile only.
 sims:
   enabled: false
+  # Overrides every entry's tag when set (values-dev.yaml: local).
   image:
-    tag: latest
+    tag: ""
   seed: 42
   list:
     - name: hl-sim
+      tag: 300e00d37d9d
       port: 3000
       probe: { path: /info, body: '{"type":"meta"}' }
     - name: binance-sim
+      tag: 05db961cd03a
       port: 3300
       probe: { path: /fapi/v1/ping }
     - name: bybit-sim
+      tag: 8b887f0bd62e
       port: 3400
       probe: { path: /v5/market/time }
 

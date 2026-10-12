@@ -5,8 +5,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 {{- end }}
 
+{{/* Images are tagged by the commit they were built from; `latest` would make
+an upgrade (and a node replacement) pull whatever was pushed last. */}}
 {{- define "winterchill.image" -}}
-{{ .root.Values.imageRegistry }}/{{ .image.repository }}:{{ .image.tag }}
+{{- $tag := toString (required (printf "image tag for %s" .image.repository) .image.tag) -}}
+{{- if eq $tag "latest" -}}
+{{- fail (printf "%s: use an explicit tag (a commit), not latest" .image.repository) -}}
+{{- end -}}
+{{ .root.Values.imageRegistry }}/{{ .image.repository }}:{{ $tag }}
 {{- end }}
 
 {{/* Name of the Secret holding S3 credentials ("" when using the instance role). */}}
