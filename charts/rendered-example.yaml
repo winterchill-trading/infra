@@ -167,7 +167,7 @@ spec:
     app.kubernetes.io/name: node-exporter
   ports:
     - name: metrics
-      port: 9100
+      port: 9101
       targetPort: metrics
 
 ---
@@ -301,7 +301,7 @@ spec:
 ---
 # Source: winterchill/templates/node-exporter.yaml
 # Host-level socket and FD collector: node_sockstat_*, node_netstat_Tcp_*,
-# node_tcp_connection_states, node_filefd_allocated. Per-container sockets,
+# node_filefd_allocated, plus memory and CPU; every other collector is off. Per-container sockets,
 # FDs and RSS come from the kubelet's built-in cAdvisor
 # (/api/v1/nodes/<node>/proxy/metrics/cadvisor: container_sockets,
 # container_file_descriptors, container_memory_rss), so no cAdvisor here.
@@ -338,12 +338,16 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - --path.rootfs=/host
-            - --web.listen-address=:9100
-            - --collector.tcpstat
-            - --collector.processes
+            - --web.listen-address=:9101
+            - --collector.disable-defaults
+            - --collector.sockstat
+            - --collector.filefd
+            - --collector.netstat
+            - --collector.meminfo
+            - --collector.cpu
           ports:
             - name: metrics
-              containerPort: 9100
+              containerPort: 9101
           readinessProbe:
             httpGet: { path: /, port: metrics }
             periodSeconds: 30

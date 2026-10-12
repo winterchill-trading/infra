@@ -90,13 +90,18 @@ sims:
       port: 3400
       probe: { path: /v5/market/time }
 
-# Host socket and FD collector, one pod per node (host network and PID
-# namespace). Recorders only dial out, so keep the port closed in the
-# node's security group and scrape it from inside the cluster.
-nodeExporter:
-  enabled: true
-  image: quay.io/prometheus/node-exporter:v1.12.1
-  port: 9100
-  resources:
-    requests: { cpu: 10m, memory: 32Mi }
-    limits: { memory: 64Mi }
+# Host socket and FD collector (node-exporter), one pod per node with the host
+# network and PID namespace. Off by default. Recorders only dial out, so keep
+# the port closed in the node's security group and scrape it from inside the
+# cluster.
+monitoring:
+  enabled: false
+  nodeExporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    # Host port. Not node-exporter's usual 9100: that is the recorder's port,
+    # and on Rancher Desktop compose publishes it on the same VM.
+    port: 9101
+    collectors: [sockstat, filefd, netstat, meminfo, cpu]
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 64Mi }

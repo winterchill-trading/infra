@@ -1,6 +1,7 @@
-{{- if .Values.nodeExporter.enabled }}
+{{- if .Values.monitoring.enabled }}
+{{- $ne := .Values.monitoring.nodeExporter }}
 # Host-level socket and FD collector: node_sockstat_*, node_netstat_Tcp_*,
-# node_tcp_connection_states, node_filefd_allocated. Per-container sockets,
+# node_filefd_allocated, plus memory and CPU; every other collector is off. Per-container sockets,
 # FDs and RSS come from the kubelet's built-in cAdvisor
 # (/api/v1/nodes/<node>/proxy/metrics/cadvisor: container_sockets,
 # container_file_descriptors, container_memory_rss), so no cAdvisor here.
@@ -30,21 +31,23 @@ spec:
         runAsUser: 65534
       containers:
         - name: node-exporter
-          image: {{ .Values.nodeExporter.image }}
+          image: {{ $ne.image }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           args:
             - --path.rootfs=/host
-            - --web.listen-address=:{{ .Values.nodeExporter.port }}
-            - --collector.tcpstat
-            - --collector.processes
+            - --web.listen-address=:{{ $ne.port }}
+            - --collector.disable-defaults
+            {{- range $ne.collectors }}
+            - --collector.{{ . }}
+            {{- end }}
           ports:
             - name: metrics
-              containerPort: {{ .Values.nodeExporter.port }}
+              containerPort: {{ $ne.port }}
           readinessProbe:
             httpGet: { path: /, port: metrics }
             periodSeconds: 30
           resources:
-            {{- toYaml .Values.nodeExporter.resources | nindent 12 }}
+            {{- toYaml $ne.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -74,6 +77,6 @@ spec:
     app.kubernetes.io/name: node-exporter
   ports:
     - name: metrics
-      port: {{ .Values.nodeExporter.port }}
+      port: {{ $ne.port }}
       targetPort: metrics
 {{- end }}

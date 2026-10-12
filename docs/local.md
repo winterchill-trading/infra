@@ -103,7 +103,8 @@ publishes images, so compose uses the community `pgsty/minio` build.
 ### Socket, FD and RSS collectors
 
 `make up-monitoring` adds three containers under the compose profile
-`monitoring` (`make down` removes them too):
+`monitoring` (`make down` removes them too). All three listen on loopback only, as
+does the MinIO console; cadvisor runs unprivileged with `SYS_ADMIN` and `SYS_PTRACE`:
 
 | Container | Port | What |
 | --- | --- | --- |
@@ -116,7 +117,9 @@ curl -s localhost:8088/metrics | grep -E '^container_(sockets|file_descriptors|m
 open 'http://localhost:9090/query?g0.expr=container_sockets'
 ```
 
-In the cluster the chart runs node-exporter as a DaemonSet (`nodeExporter.enabled`);
+In the cluster the chart runs node-exporter as a DaemonSet when `monitoring.enabled`
+is set (off by default, on in the dev profile), with only the `sockstat`, `filefd`,
+`netstat`, `meminfo` and `cpu` collectors;
 per-container sockets, FDs and RSS come from the kubelet's built-in cAdvisor, which
 k3s serves without extra pods:
 
