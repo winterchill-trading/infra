@@ -1,0 +1,92 @@
+{{- if .Values.dayClose.enabled }}
+{{- range .Values.recorder.venues }}
+---
+# Converts yesterday's norm/ event logs on this venue's buffer volume into
+# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $.Release.Name }}-day-close-{{ .name }}
+  labels:
+    {{- include "winterchill.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: day-close
+    winterchill/venue: {{ .name }}
+spec:
+  schedule: {{ $.Values.dayClose.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/instance: {{ $.Release.Name }}
+            app.kubernetes.io/name: day-close
+            winterchill/venue: {{ .name }}
+        spec:
+          restartPolicy: OnFailure
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+          # The buffer volume is ReadWriteOnce: run next to the recorder.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/instance: {{ $.Release.Name }}
+                      app.kubernetes.io/name: market-recorder
+                      winterchill/venue: {{ .name }}
+          {{- if $.Values.dayClose.upload }}
+          initContainers:
+          {{- else }}
+          containers:
+          {{- end }}
+            - name: day-close
+              image: {{ include "winterchill.image" (dict "root" $ "image" $.Values.dayClose.image) }}
+              imagePullPolicy: {{ $.Values.imagePullPolicy }}
+              args: ["day-close", "-dir", {{ $.Values.recorder.dataDir | quote }}]
+              resources:
+                {{- toYaml $.Values.dayClose.resources | nindent 16 }}
+              volumeMounts:
+                - name: data
+                  mountPath: {{ $.Values.recorder.dataDir }}
+          {{- if $.Values.dayClose.upload }}
+          containers:
+            - name: upload
+              image: {{ $.Values.dayClose.rcloneImage }}
+              args:
+                - copy
+                - {{ $.Values.recorder.dataDir | quote }}
+                - {{ include "winterchill.s3Remote" $ | quote }}
+                - --include
+                - "**/parquet/**"
+              env:
+                {{- include "winterchill.rcloneEnv" $ | nindent 16 }}
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+              volumeMounts:
+                - name: data
+                  mountPath: {{ $.Values.recorder.dataDir }}
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          {{- end }}
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ $.Release.Name }}-recorder-{{ .name }}
+            - name: tmp
+              emptyDir: {}
+{{- end }}
+{{- end }}
