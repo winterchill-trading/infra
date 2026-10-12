@@ -27,6 +27,11 @@ fi
 # what moved.
 export OPAMEXTERNALSOLVER=builtin-mccs+glpk
 
+# Git checkouts of pins restored from the cache cannot be synchronised again
+# (opam looks for a refs/remotes/opam-ref-<commit> that is not there), so a
+# re-pin fails. Drop them; `opam pin add` clones each pin afresh.
+rm -rf _opam/.opam-switch/sources
+
 changed=()
 while read -r name target; do
   opam pin add --no-action --yes "${name}" "${target}"
