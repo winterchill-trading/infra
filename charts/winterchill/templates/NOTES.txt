@@ -1,0 +1,9 @@
+Recorders: {{ range .Values.recorder.venues }}{{ $.Release.Name }}-recorder-{{ .name }} {{ end }}
+Uploads go to {{ include "winterchill.s3Remote" . }}.
+
+  kubectl port-forward svc/{{ .Release.Name }}-recorder-{{ (first .Values.recorder.venues).name }} {{ .Values.recorder.httpPort }}
+  curl localhost:{{ .Values.recorder.httpPort }}/healthz
+{{- if .Values.sims.enabled }}
+
+Simulators: {{ range .Values.sims.list }}{{ $.Release.Name }}-{{ .name }}:{{ .port }} {{ end }}
+{{- end }}
