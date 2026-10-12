@@ -63,7 +63,7 @@ ARG RUNTIME_PACKAGES=""
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 tzdata ${RUNTIME_PACKAGES} \
+      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 tini tzdata ${RUNTIME_PACKAGES} \
  && rm -rf /var/lib/apt/lists/* \
  && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
  && { userdel -r ubuntu 2>/dev/null || true; } \
@@ -78,4 +78,6 @@ LABEL org.opencontainers.image.source="https://github.com/winterchill-trading/in
       org.opencontainers.image.title="${REPO}"
 USER 10001:10001
 WORKDIR /var/lib/service
-ENTRYPOINT ["/usr/local/bin/service"]
+# tini as PID 1: the kernel drops SIGTERM for a PID 1 without a handler, so
+# binaries that rely on the default action would only die on SIGKILL.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/service"]
