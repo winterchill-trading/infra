@@ -16,7 +16,8 @@
 #                     respecting .gitignore) instead of cloning REF
 #   REF=main          git ref to fetch when SRC is unset
 #   BASE_IMAGE=...    base image (default ghcr.io/winterchill-trading/oxcaml-base:latest)
-#   TAG=...           image tag (default ghcr.io/winterchill-trading/REPO:local)
+#   TAG=...           image tag (default ghcr.io/winterchill-trading/REPO:local,
+#                     plus REPO:<commit12> unless SRC has uncommitted changes)
 #   PLATFORM=...      e.g. linux/amd64,linux/arm64 (default: host, loaded into docker)
 set -euo pipefail
 
@@ -67,6 +68,9 @@ args=(
   -t "${tag}"
 )
 [[ -n ${BASE_IMAGE:-} ]] && args+=(--build-arg "BASE_IMAGE=${BASE_IMAGE}")
+if [[ -z ${TAG:-} && ${revision} != *-dirty ]]; then
+  args+=(-t "ghcr.io/${org}/${repo}:${revision:0:12}")
+fi
 
 if [[ -n ${SRC:-} ]]; then
   # Stage only what git would track, so _build directories stay out.
