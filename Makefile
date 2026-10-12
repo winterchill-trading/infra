@@ -1,7 +1,7 @@
 COMPOSE := docker compose -f compose/docker-compose.yml
 BASE_IMAGE ?= ghcr.io/winterchill-trading/oxcaml-base:latest
 
-.PHONY: base build up down logs ps lint chart
+.PHONY: base build up down logs ps lint chart pins
 
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
@@ -23,9 +23,13 @@ ps:
 
 lint:
 	hadolint images/oxcaml-base/Dockerfile images/service/Dockerfile
-	shellcheck images/service/build.sh
+	shellcheck images/service/build.sh scripts/*.sh
+	scripts/test-check-pins.sh
 	helm lint charts/winterchill
 	helm lint charts/winterchill -f charts/winterchill/values-dev.yaml
 
 chart: ## re-render the reviewed example manifest
 	helm template winterchill charts/winterchill -f charts/winterchill/values-dev.yaml > charts/rendered-example.yaml
+
+pins: ## check every sibling checkout's CI pins against its dune-project
+	scripts/check-pins.sh -a
