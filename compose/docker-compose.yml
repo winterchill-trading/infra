@@ -35,7 +35,7 @@ services:
         REPO: hl-sim
         BIN: hl-sim
     command: ["-port", "3000", "-seed", "42"]
-    ports: ["3000:3000"]
+    ports: ["${HL_SIM_PORT:-3000}:3000"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "-d", '{"type":"meta"}', "http://localhost:3000/info"]
       interval: 5s
@@ -50,7 +50,7 @@ services:
         REPO: binance-sim
         BIN: binance-sim
     command: ["-port", "3300", "-seed", "42"]
-    ports: ["3300:3300"]
+    ports: ["${BINANCE_SIM_PORT:-3300}:3300"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3300/fapi/v1/ping"]
       interval: 5s
@@ -65,7 +65,7 @@ services:
         REPO: bybit-sim
         BIN: bybit-sim
     command: ["-port", "3400", "-seed", "42"]
-    ports: ["3400:3400"]
+    ports: ["${BYBIT_SIM_PORT:-3400}:3400"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3400/v5/market/time"]
       interval: 5s
@@ -104,7 +104,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["${MINIO_PORT:-9000}:9000", "${MINIO_CONSOLE_PORT:-9001}:9001"]
     volumes: ["minio-data:/data"]
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -145,7 +145,7 @@ services:
     volumes:
       - ./recorder.sexp:/etc/market-recorder/recorder.sexp:ro
       - recorder-data:/var/lib/market-recorder
-    ports: ["9100:9100"]
+    ports: ["${RECORDER_PORT:-9100}:9100"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:9100/healthz"]
       interval: 10s
