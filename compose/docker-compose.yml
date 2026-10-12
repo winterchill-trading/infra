@@ -1,0 +1,141 @@
+# Local stack: the three venue simulators, a market maker per venue, the
+# market recorder and MinIO as its S3 target.
+#
+#   make up      # build (if needed) and start
+#   make logs
+#   make down
+#
+# Images are built from images/service with the base image
+# ghcr.io/winterchill-trading/oxcaml-base:latest (pull it, or build it with
+# `make base`).
+name: winterchill
+
+x-service-build: &service-build
+  context: ../images/service
+  args: &service-args
+    BASE_IMAGE: ${BASE_IMAGE:-ghcr.io/winterchill-trading/oxcaml-base:latest}
+    REF: ${REF:-main}
+
+x-mm: &mm
+  image: ghcr.io/winterchill-trading/market-maker:local
+  restart: unless-stopped
+  environment:
+    BINANCE_API_KEY: sim-key
+    BINANCE_API_SECRET: sim-secret
+    BYBIT_API_KEY: sim-key
+    BYBIT_API_SECRET: sim-secret
+
+services:
+  hl-sim:
+    image: ghcr.io/winterchill-trading/hl-sim:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: hl-sim
+        BIN: hl-sim
+    command: ["-port", "3000", "-seed", "42"]
+    ports: ["3000:3000"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-d", '{"type":"meta"}', "http://localhost:3000/info"]
+      interval: 5s
+      retries: 20
+
+  binance-sim:
+    image: ghcr.io/winterchill-trading/binance-sim:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: binance-sim
+        BIN: binance-sim
+    command: ["-port", "3300", "-seed", "42"]
+    ports: ["3300:3300"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3300/fapi/v1/ping"]
+      interval: 5s
+      retries: 20
+
+  bybit-sim:
+    image: ghcr.io/winterchill-trading/bybit-sim:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: bybit-sim
+        BIN: bybit-sim
+    command: ["-port", "3400", "-seed", "42"]
+    ports: ["3400:3400"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3400/v5/market/time"]
+      interval: 5s
+      retries: 20
+
+  mm-hyperliquid:
+    <<: *mm
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: market-maker
+        BIN: market-maker
+    command: ["-venue", "hyperliquid", "-network", "local", "-base-url", "http://hl-sim:3000"]
+    depends_on:
+      hl-sim: { condition: service_healthy }
+
+  mm-binance:
+    <<: *mm
+    command: ["-venue", "binance", "-network", "local", "-base-url", "http://binance-sim:3300"]
+    depends_on:
+      binance-sim: { condition: service_healthy }
+      mm-hyperliquid: { condition: service_started }
+
+  mm-bybit:
+    <<: *mm
+    command: ["-venue", "bybit", "-network", "local", "-base-url", "http://bybit-sim:3400"]
+    depends_on:
+      bybit-sim: { condition: service_healthy }
+      mm-hyperliquid: { condition: service_started }
+
+  minio:
+    # Upstream stopped publishing MinIO images; pgsty/minio is a maintained build.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 20
+
+  # One-shot: create the bucket the recorder uploads into.
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        && mc mb --ignore-existing local/market-data
+
+  # TODO: enable once market-recorder ships its `run -config` command.
+  # market-recorder:
+  #   image: ghcr.io/winterchill-trading/market-recorder:local
+  #   build:
+  #     <<: *service-build
+  #     args:
+  #       <<: *service-args
+  #       REPO: market-recorder
+  #       BIN: market-recorder
+  #       RUNTIME_PACKAGES: rclone
+  #   command: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+
+volumes:
+  minio-data:
