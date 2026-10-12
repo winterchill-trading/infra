@@ -1,0 +1,83 @@
+name: ox-setup
+description: >
+  OxCaml switch from the pinned ox opam repository, sibling pins at their
+  current commits, and the repo's opam dependencies, with the installed
+  switch cached between runs.
+inputs:
+  pins:
+    description: >
+      Sibling pins in dependency order, one "name url" per line. A url
+      without "#ref" is pinned at the commit its HEAD resolves to now.
+    required: false
+    default: ""
+  with-test:
+    description: Install test dependencies of the repo's own packages.
+    required: false
+    default: "true"
+  working-directory:
+    description: Directory holding the repo's opam files.
+    required: false
+    default: "."
+  ox-repository:
+    description: The ox opam repository, pinned at a commit.
+    required: false
+    default: https://github.com/oxcaml/opam-repository.git#afddc8337950dbc02863fe30ae58735a1cf2719f
+  ocaml-compiler:
+    description: Compiler package passed to setup-ocaml.
+    required: false
+    default: ocaml-variants.5.2.0+ox
+outputs:
+  cache-hit:
+    description: "exact, partial or none"
+    value: ${{ steps.restore.outputs.cache-hit == 'true' && 'exact' || (steps.restore.outputs.cache-matched-key != '' && 'partial' || 'none') }}
+  cache-key:
+    description: The key the switch was saved (or found) under.
+    value: ${{ steps.key.outputs.key }}
+runs:
+  using: composite
+  steps:
+    - uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: ${{ inputs.ocaml-compiler }}
+        opam-repositories: |
+          ox: ${{ inputs.ox-repository }}
+          default: https://github.com/ocaml/opam-repository.git
+
+    - id: key
+      name: Resolve pins and cache key
+      shell: bash
+      env:
+        PINS: ${{ inputs.pins }}
+        OX_REPOSITORY: ${{ inputs.ox-repository }}
+        WITH_TEST: ${{ inputs.with-test }}
+        WORKDIR: ${{ inputs.working-directory }}
+        COMPILER: ${{ inputs.ocaml-compiler }}
+      run: ${{ github.action_path }}/resolve.sh
+
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ${{ github.workspace }}/_opam
+          !${{ github.workspace }}/_opam/.opam-switch/build
+          !${{ github.workspace }}/_opam/.opam-switch/backup
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.restore-prefix }}
+
+    - name: Pin siblings and install dependencies
+      shell: bash
+      env:
+        CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+        WITH_TEST: ${{ inputs.with-test }}
+        WORKDIR: ${{ inputs.working-directory }}
+        PIN_FILE: ${{ steps.key.outputs.pin-file }}
+      run: ${{ github.action_path }}/install.sh
+
+    - if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ${{ github.workspace }}/_opam
+          !${{ github.workspace }}/_opam/.opam-switch/build
+          !${{ github.workspace }}/_opam/.opam-switch/backup
+        key: ${{ steps.key.outputs.key }}
