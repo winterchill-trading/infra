@@ -11,3 +11,25 @@ jobs:
       - uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: images/oxcaml-base/Dockerfile
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: images/service/Dockerfile
+      - run: shellcheck images/service/build.sh
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - run: helm lint charts/winterchill
+      - run: helm lint charts/winterchill -f charts/winterchill/values-dev.yaml
+      - name: rendered example is up to date
+        run: |
+          helm template winterchill charts/winterchill -f charts/winterchill/values-dev.yaml > /tmp/rendered.yaml
+          diff -u charts/rendered-example.yaml /tmp/rendered.yaml
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f compose/docker-compose.yml config -q
