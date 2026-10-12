@@ -2,7 +2,10 @@
 {{- range .Values.recorder.venues }}
 ---
 # Converts yesterday's norm/ event logs on this venue's buffer volume into
-# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+# parquet/ tables (`market-data day-close`, idempotent), then runs the
+# data-quality assertions over them (`market-data check`) and uploads them.
+# A failed check fails the Job: its log prints a FAIL line per check, and
+# kube-state-metrics exposes it as kube_job_status_failed.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -47,7 +50,7 @@ spec:
                       app.kubernetes.io/instance: {{ $.Release.Name }}
                       app.kubernetes.io/name: market-recorder
                       winterchill/venue: {{ .name }}
-          {{- if $.Values.dayClose.upload }}
+          {{- if or $.Values.dayClose.upload $.Values.dayClose.check.enabled }}
           initContainers:
           {{- else }}
           containers:
@@ -61,8 +64,29 @@ spec:
               volumeMounts:
                 - name: data
                   mountPath: {{ $.Values.recorder.dataDir }}
-          {{- if $.Values.dayClose.upload }}
+          {{- if or $.Values.dayClose.upload $.Values.dayClose.check.enabled }}
           containers:
+          {{- end }}
+          {{- if $.Values.dayClose.check.enabled }}
+            # Runs beside the upload: a quality failure is reported, but the
+            # day's tables are still shipped.
+            - name: check
+              image: {{ include "winterchill.image" (dict "root" $ "image" $.Values.dayClose.image) }}
+              imagePullPolicy: {{ $.Values.imagePullPolicy }}
+              args:
+                - check
+                - -dir
+                - {{ $.Values.recorder.dataDir | quote }}
+                - -max-gap
+                - {{ $.Values.dayClose.check.maxGap | quote }}
+              resources:
+                {{- toYaml $.Values.dayClose.resources | nindent 16 }}
+              volumeMounts:
+                - name: data
+                  mountPath: {{ $.Values.recorder.dataDir }}
+                  readOnly: true
+          {{- end }}
+          {{- if $.Values.dayClose.upload }}
             - name: upload
               image: {{ $.Values.dayClose.rcloneImage }}
               args:

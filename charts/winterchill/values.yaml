@@ -71,6 +71,12 @@ dayClose:
   # Upload the day's parquet/ tables after the close.
   upload: true
   rcloneImage: rclone/rclone:1.71.1
+  # `market-data check` after the close (needs an image built with
+  # DUCKDB_VERSION, see service-images.yml). Violations fail the Job.
+  check:
+    enabled: true
+    # Longest allowed recv_ts gap per instrument (Core span: 30s, 1m, 5m).
+    maxGap: 1m
   resources:
     requests: { cpu: 200m, memory: 512Mi }
     limits: { memory: 2Gi }
