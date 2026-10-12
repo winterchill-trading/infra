@@ -15,7 +15,7 @@ jobs:
             https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
           chmod +x /usr/local/bin/hadolint
           hadolint images/oxcaml-base/Dockerfile images/service/Dockerfile
-      - run: shellcheck images/service/build.sh scripts/*.sh
+      - run: shellcheck -x images/service/build.sh scripts/*.sh test-actions/*.sh
       - run: scripts/test-check-pins.sh
   helm:
     runs-on: ubuntu-latest

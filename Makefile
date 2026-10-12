@@ -35,7 +35,7 @@ ps: ## compose ps plus each image's commit and sibling pins
 
 lint:
 	hadolint images/oxcaml-base/Dockerfile images/service/Dockerfile
-	shellcheck images/service/build.sh scripts/*.sh
+	shellcheck -x images/service/build.sh scripts/*.sh test-actions/*.sh
 	scripts/test-check-pins.sh
 	helm lint charts/winterchill
 	helm lint charts/winterchill -f charts/winterchill/values-dev.yaml
