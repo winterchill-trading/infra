@@ -160,6 +160,39 @@ services:
       bybit-sim: { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }
 
+  # Day close, under the `day-close` profile (`make up-day-close`): every
+  # DAY_CLOSE_INTERVAL seconds converts yesterday's norm/ logs on the
+  # recorder volume into parquet/ (idempotent), then runs `market-data check`.
+  # A failed check logs `day-close check FAILED` with the FAIL lines above it
+  # (`docker compose logs day-close`) and the loop carries on.
+  day-close:
+    image: ghcr.io/winterchill-trading/market-data:local
+    profiles: [day-close]
+    restart: unless-stopped
+    entrypoint: ["/usr/bin/tini", "--", "/bin/bash", "-c"]
+    environment:
+      DAY_CLOSE_INTERVAL: ${DAY_CLOSE_INTERVAL:-3600}
+      DAY_CLOSE_MAX_GAP: ${DAY_CLOSE_MAX_GAP:-1m}
+    command:
+      - |
+        dir=/var/lib/market-recorder
+        while true; do
+          if market-data day-close -dir "$$dir"; then
+            if market-data check -dir "$$dir" -max-gap "$$DAY_CLOSE_MAX_GAP"; then
+              echo "day-close check ok"
+            else
+              echo "day-close check FAILED" >&2
+            fi
+          else
+            echo "day-close FAILED" >&2
+          fi
+          sleep "$$DAY_CLOSE_INTERVAL"
+        done
+    volumes:
+      - recorder-data:/var/lib/market-recorder
+    depends_on:
+      market-recorder: { condition: service_started }
+
   # Collectors, under the `monitoring` profile (`make up-monitoring`): socket,
   # FD and RSS history next to the recorder's own /metrics.
   #
