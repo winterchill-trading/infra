@@ -56,10 +56,19 @@ jobs:
 - `working-directory` (default `.`): where the repo's `*.opam` files are.
 - `ox-repository`: defaults to the base image's commit; leave it out so a bump in infra
   reaches every repo.
-- A repo that pins its own package first (exchange-core) keeps a
-  `opam pin add <pkg> . --no-action` step before the action; the action only pins
-  what it is given.
+- A repo whose two packages depend on each other through a sibling (exchange-core:
+  exchange-core-engine needs order-book, which needs exchange-core) cannot run
+  `--deps-only` over both opam files, and no `opam` exists before the action to pin
+  the checkout first. exchange-core copies `exchange-core-engine.opam` into
+  `_ox-engine/`, runs the action with `working-directory: _ox-engine` and pins for
+  fixed-decimal, exchange-core and order-book, then runs `opam pin add exchange-core .`
+  (rebuilds exchange-core and order-book from the checkout, about 15 seconds) and builds
+  with `--only-packages exchange-core-engine`.
 - Outputs: `cache-hit` (`exact`, `partial` or `none`) and `cache-key`.
+
+Workflows reference the action as `@main` on purpose: it lives in this org's own infra
+repository, which only org admins can write to, so a fix reaches every repo on its next
+run. Third-party actions (`actions/*`, `ocaml/setup-ocaml`) stay pinned to a version.
 
 `scripts/check-pins.sh` reads the `pins: |` block like the old `opam pin add` lines,
 and checks the ox commit (the action default counts) against
@@ -93,7 +102,7 @@ Restore order:
    installs any new dependencies, and saves under the new key.
 3. **none**: the full dependency build, on top of setup-ocaml's own compiler cache.
 
-## When the cache misses
+## When the cache misses or breaks
 
 - First run of a repo, or of a new pin list (adding or reordering a pin): full miss.
 - Any sibling pushes to its default branch: partial hit; the rebuild is the moved
@@ -109,6 +118,18 @@ Restore order:
   last dozen.
 - `ubuntu-latest` moving to a new Ubuntu release (`ImageOS`, e.g. `ubuntu24`): full
   miss. Weekly image updates within a release keep the key.
+- An exact hit runs no opam command at all. It used to run `opam install --deps-only` as
+  a "no-op" check, but setup-ocaml selects the `builtin-0install` solver, which on a
+  populated switch picked sedlex 3.6+ox over the installed 3.7+ox (sedlex comes in
+  through core_bench -> command_nodejs -> js_of_ocaml-compiler, so only repos with
+  core_bench as a test dependency were hit), recompiled cohttp, conduit and venue-net,
+  and then failed (exit 40) to refetch the venue-net pin.
+- Partial hits and misses use `OPAMEXTERNALSOLVER=builtin-mccs+glpk`, which keeps
+  installed versions where it can.
+- Git checkouts of pins restored from the cache cannot be synchronised again (opam looks
+  for `refs/remotes/opam-ref-<commit>`, which is gone), so `opam pin add` failed on a
+  partial hit. The action deletes `_opam/.opam-switch/sources` before re-pinning; each
+  pin is cloned afresh (a few seconds each).
 
 ## Timings
 
@@ -137,3 +158,43 @@ hl-sim is the pilot: its own `ci.yml` uses the action since 2026-10-12.
 The saved switch is 2.5 GB (zstd tarball; setup-ocaml's compiler-only entry is
 1.0 GB) and restores in about 30 seconds. Before the action hl-sim's CI took about
 17 minutes on every push.
+
+## Rollout
+
+Every repo except mm-core, market-recorder, specs and infra itself moved to the action on
+2026-10-12 (hl-sim was the pilot). Seconds on `ubuntu-latest`. Cold is the first run: no
+switch cache, setup-ocaml's compiler cache warm. Warm is a rerun of the same commit (exact
+hit, after the two fixes above). exchange-core's build column leaves out its 15 second
+re-pin step.
+
+| Repo | Pins | Cold: ox-setup | Cold: job | Warm: ox-setup | Warm: dune build + test | Warm: job |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| fixed-decimal | 0 | 1077 | 1093 | 79 | 19 | 105 |
+| exchange-core | 3 | 779 | 815 | 83 | 15 | 106 |
+| hl-protocol | 2 | 576 | 594 | 82 | 14 | 101 |
+| order-book | 2 | 762 | 775 | 70 | 18 | 92 |
+| venue-net | 0 | 1031 | 1047 | 68 | 17 | 89 |
+| parquet | 0 | 824 | 844 | 67 | 19 | 92 |
+| market-data | 3 | 1009 | 1051 | 89 | 37 | 133 |
+| binance-protocol | 2 | 798 | 828 | 102 | 28 | 136 |
+| bybit-protocol | 2 | 762 | 785 | 69 | 19 | 93 |
+| equities-core | 2 | 531 | 543 | 110 | 11 | 130 |
+| hl-client | 6 | 1063 | 1088 | 78 | 17 | 100 |
+| binance-sim | 5 | 868 | 884 | 94 | 12 | 110 |
+| bybit-sim | 5 | 1029 | 1048 | 105 | 13 | 125 |
+| nyse-sim | 5 | 721 | 739 | 92 | 19 | 118 |
+| cboe-sim | 5 | 858 | 881 | 93 | 22 | 121 |
+| cme-sim | 5 | 786 | 808 | 69 | 23 | 96 |
+| bitget-feed | 5 | 1163 | 1187 | 99 | 15 | 121 |
+| coinbase-feed | 5 | 1194 | 1216 | 122 | 16 | 146 |
+| deribit-feed | 5 | 938 | 958 | 95 | 17 | 118 |
+| kraken-feed | 5 | 962 | 982 | 69 | 18 | 92 |
+| okx-feed | 5 | 1135 | 1154 | 120 | 17 | 144 |
+| hl-mm | 11 | 884 | 927 | 117 | 19 | 141 |
+| binance-client | 10 | 1074 | 1103 | 93 | 19 | 117 |
+| bybit-client | 10 | 1210 | 1235 | 74 | 19 | 98 |
+| market-maker | 13 | 1007 | 1029 | 120 | 17 | 145 |
+
+Cold runs took 9 to 21 minutes, warm runs 1.5 to 2.5 minutes. A partial hit (hl-sim with
+hl-protocol pinned at an older commit, after both fixes) took 122 seconds in ox-setup and
+rebuilt only hl-protocol.
