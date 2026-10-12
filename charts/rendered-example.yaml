@@ -320,6 +320,11 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
           env:
+            # Root filesystems are read-only: keep rclone's config and cache in /tmp.
+            - name: RCLONE_CONFIG
+              value: /tmp/rclone.conf
+            - name: RCLONE_CACHE_DIR
+              value: /tmp/rclone
             - name: RCLONE_CONFIG_S3_TYPE
               value: s3
             - name: RCLONE_CONFIG_S3_PROVIDER
@@ -418,6 +423,11 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
           env:
+            # Root filesystems are read-only: keep rclone's config and cache in /tmp.
+            - name: RCLONE_CONFIG
+              value: /tmp/rclone.conf
+            - name: RCLONE_CACHE_DIR
+              value: /tmp/rclone
             - name: RCLONE_CONFIG_S3_TYPE
               value: s3
             - name: RCLONE_CONFIG_S3_PROVIDER
@@ -516,6 +526,11 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
           env:
+            # Root filesystems are read-only: keep rclone's config and cache in /tmp.
+            - name: RCLONE_CONFIG
+              value: /tmp/rclone.conf
+            - name: RCLONE_CACHE_DIR
+              value: /tmp/rclone
             - name: RCLONE_CONFIG_S3_TYPE
               value: s3
             - name: RCLONE_CONFIG_S3_PROVIDER
@@ -777,6 +792,11 @@ spec:
                 - --include
                 - "**/parquet/**"
               env:
+                # Root filesystems are read-only: keep rclone's config and cache in /tmp.
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+                - name: RCLONE_CACHE_DIR
+                  value: /tmp/rclone
                 - name: RCLONE_CONFIG_S3_TYPE
                   value: s3
                 - name: RCLONE_CONFIG_S3_PROVIDER
@@ -793,8 +813,6 @@ spec:
                 - name: AWS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
-                - name: RCLONE_CONFIG
-                  value: /tmp/rclone.conf
               volumeMounts:
                 - name: data
                   mountPath: /var/lib/market-recorder
@@ -878,6 +896,11 @@ spec:
                 - --include
                 - "**/parquet/**"
               env:
+                # Root filesystems are read-only: keep rclone's config and cache in /tmp.
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+                - name: RCLONE_CACHE_DIR
+                  value: /tmp/rclone
                 - name: RCLONE_CONFIG_S3_TYPE
                   value: s3
                 - name: RCLONE_CONFIG_S3_PROVIDER
@@ -894,8 +917,6 @@ spec:
                 - name: AWS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
-                - name: RCLONE_CONFIG
-                  value: /tmp/rclone.conf
               volumeMounts:
                 - name: data
                   mountPath: /var/lib/market-recorder
@@ -979,6 +1000,11 @@ spec:
                 - --include
                 - "**/parquet/**"
               env:
+                # Root filesystems are read-only: keep rclone's config and cache in /tmp.
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+                - name: RCLONE_CACHE_DIR
+                  value: /tmp/rclone
                 - name: RCLONE_CONFIG_S3_TYPE
                   value: s3
                 - name: RCLONE_CONFIG_S3_PROVIDER
@@ -995,8 +1021,6 @@ spec:
                 - name: AWS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
-                - name: RCLONE_CONFIG
-                  value: /tmp/rclone.conf
               volumeMounts:
                 - name: data
                   mountPath: /var/lib/market-recorder

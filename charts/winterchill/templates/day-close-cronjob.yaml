@@ -73,8 +73,6 @@ spec:
                 - "**/parquet/**"
               env:
                 {{- include "winterchill.rcloneEnv" $ | nindent 16 }}
-                - name: RCLONE_CONFIG
-                  value: /tmp/rclone.conf
               volumeMounts:
                 - name: data
                   mountPath: {{ $.Values.recorder.dataDir }}

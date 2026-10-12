@@ -21,6 +21,11 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 
 {{/* rclone S3 remote named `s3`, configured entirely from the environment. */}}
 {{- define "winterchill.rcloneEnv" -}}
+# Root filesystems are read-only: keep rclone's config and cache in /tmp.
+- name: RCLONE_CONFIG
+  value: /tmp/rclone.conf
+- name: RCLONE_CACHE_DIR
+  value: /tmp/rclone
 - name: RCLONE_CONFIG_S3_TYPE
   value: s3
 - name: RCLONE_CONFIG_S3_PROVIDER
