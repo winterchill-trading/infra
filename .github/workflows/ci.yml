@@ -77,3 +77,8 @@ jobs:
         working-directory: hl-sim
       - run: opam exec -- dune test
         working-directory: hl-sim
+  # Self-test of the reusable obj-magic workflow on an allowlisted fixture.
+  obj-magic:
+    uses: ./.github/workflows/obj-magic.yml
+    with:
+      working-directory: test-fixtures/obj-magic
