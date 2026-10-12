@@ -1,0 +1,1011 @@
+---
+# Source: winterchill/templates/s3-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: winterchill-s3
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: "minioadmin"
+  AWS_SECRET_ACCESS_KEY: "minioadmin"
+
+---
+# Source: winterchill/templates/recorder-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: winterchill-recorder-binance
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: binance
+data:
+  recorder.sexp: |
+    ((data_dir /var/lib/market-recorder)
+     (http_port 9100)
+     (venues
+      (((venue Binance)
+        (symbols (BTCUSDT))
+        (streams (Trades Bbo L2))
+        (config (Custom (base_url http://winterchill-binance-sim:3300))))))
+     (upload
+      ((command (rclone copyto {file} s3:market-data/{rel}))
+       (delete_after_upload false))))
+---
+# Source: winterchill/templates/recorder-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: winterchill-recorder-bybit
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: bybit
+data:
+  recorder.sexp: |
+    ((data_dir /var/lib/market-recorder)
+     (http_port 9100)
+     (venues
+      (((venue Bybit)
+        (symbols (BTCUSDT))
+        (streams (Trades Bbo L2))
+        (config (Custom (base_url http://winterchill-bybit-sim:3400))))))
+     (upload
+      ((command (rclone copyto {file} s3:market-data/{rel}))
+       (delete_after_upload false))))
+---
+# Source: winterchill/templates/recorder-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: winterchill-recorder-hyperliquid
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: hyperliquid
+data:
+  recorder.sexp: |
+    ((data_dir /var/lib/market-recorder)
+     (http_port 9100)
+     (venues
+      (((venue Hyperliquid)
+        (symbols (BTC))
+        (streams (Trades L2))
+        (config (Custom (base_url http://winterchill-hl-sim:3000))))))
+     (upload
+      ((command (rclone copyto {file} s3:market-data/{rel}))
+       (delete_after_upload false))))
+
+---
+# Source: winterchill/templates/recorder-pvc.yaml
+# Local buffer: files sit here until the upload command has copied them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: winterchill-recorder-binance
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: binance
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+# Source: winterchill/templates/recorder-pvc.yaml
+# Local buffer: files sit here until the upload command has copied them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: winterchill-recorder-bybit
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: bybit
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+# Source: winterchill/templates/recorder-pvc.yaml
+# Local buffer: files sit here until the upload command has copied them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: winterchill-recorder-hyperliquid
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: hyperliquid
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+# Source: winterchill/templates/recorder-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-recorder-binance
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: binance
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: binance
+  ports:
+    - name: http
+      port: 9100
+      targetPort: http
+---
+# Source: winterchill/templates/recorder-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-recorder-bybit
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: bybit
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: bybit
+  ports:
+    - name: http
+      port: 9100
+      targetPort: http
+---
+# Source: winterchill/templates/recorder-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-recorder-hyperliquid
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: hyperliquid
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: hyperliquid
+  ports:
+    - name: http
+      port: 9100
+      targetPort: http
+
+---
+# Source: winterchill/templates/sims.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-hl-sim
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-sim
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: hl-sim
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+# Source: winterchill/templates/sims.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-binance-sim
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: binance-sim
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: binance-sim
+  ports:
+    - name: http
+      port: 3300
+      targetPort: http
+---
+# Source: winterchill/templates/sims.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-bybit-sim
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: bybit-sim
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: bybit-sim
+  ports:
+    - name: http
+      port: 3400
+      targetPort: http
+
+---
+# Source: winterchill/templates/recorder-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-recorder-binance
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: binance
+spec:
+  replicas: 1
+  # One writer per buffer volume: never run old and new pods side by side.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: market-recorder
+      winterchill/venue: binance
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: market-recorder
+        winterchill/venue: binance
+      annotations:
+        checksum/config: c9271ffc46b944e2ab825120cd8a84733424321adacdca55aa002ddbd421987a
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: recorder
+          image: ghcr.io/winterchill-trading/market-recorder:local
+          imagePullPolicy: IfNotPresent
+          args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+          env:
+            - name: RCLONE_CONFIG_S3_TYPE
+              value: s3
+            - name: RCLONE_CONFIG_S3_PROVIDER
+              value: "Minio"
+            - name: RCLONE_CONFIG_S3_REGION
+              value: "us-east-1"
+            - name: RCLONE_CONFIG_S3_ENDPOINT
+              value: "http://host.rancher-desktop.internal:9000"
+            - name: RCLONE_CONFIG_S3_ENV_AUTH
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: winterchill-s3, key: AWS_ACCESS_KEY_ID }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
+          ports:
+            - name: http
+              containerPort: 9100
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 4
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/market-recorder
+            - name: config
+              mountPath: /etc/market-recorder
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: winterchill-recorder-binance
+        - name: config
+          configMap:
+            name: winterchill-recorder-binance
+        - name: tmp
+          emptyDir: {}
+---
+# Source: winterchill/templates/recorder-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-recorder-bybit
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: bybit
+spec:
+  replicas: 1
+  # One writer per buffer volume: never run old and new pods side by side.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: market-recorder
+      winterchill/venue: bybit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: market-recorder
+        winterchill/venue: bybit
+      annotations:
+        checksum/config: c9271ffc46b944e2ab825120cd8a84733424321adacdca55aa002ddbd421987a
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: recorder
+          image: ghcr.io/winterchill-trading/market-recorder:local
+          imagePullPolicy: IfNotPresent
+          args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+          env:
+            - name: RCLONE_CONFIG_S3_TYPE
+              value: s3
+            - name: RCLONE_CONFIG_S3_PROVIDER
+              value: "Minio"
+            - name: RCLONE_CONFIG_S3_REGION
+              value: "us-east-1"
+            - name: RCLONE_CONFIG_S3_ENDPOINT
+              value: "http://host.rancher-desktop.internal:9000"
+            - name: RCLONE_CONFIG_S3_ENV_AUTH
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: winterchill-s3, key: AWS_ACCESS_KEY_ID }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
+          ports:
+            - name: http
+              containerPort: 9100
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 4
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/market-recorder
+            - name: config
+              mountPath: /etc/market-recorder
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: winterchill-recorder-bybit
+        - name: config
+          configMap:
+            name: winterchill-recorder-bybit
+        - name: tmp
+          emptyDir: {}
+---
+# Source: winterchill/templates/recorder-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-recorder-hyperliquid
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: hyperliquid
+spec:
+  replicas: 1
+  # One writer per buffer volume: never run old and new pods side by side.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: market-recorder
+      winterchill/venue: hyperliquid
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: market-recorder
+        winterchill/venue: hyperliquid
+      annotations:
+        checksum/config: c9271ffc46b944e2ab825120cd8a84733424321adacdca55aa002ddbd421987a
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: recorder
+          image: ghcr.io/winterchill-trading/market-recorder:local
+          imagePullPolicy: IfNotPresent
+          args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+          env:
+            - name: RCLONE_CONFIG_S3_TYPE
+              value: s3
+            - name: RCLONE_CONFIG_S3_PROVIDER
+              value: "Minio"
+            - name: RCLONE_CONFIG_S3_REGION
+              value: "us-east-1"
+            - name: RCLONE_CONFIG_S3_ENDPOINT
+              value: "http://host.rancher-desktop.internal:9000"
+            - name: RCLONE_CONFIG_S3_ENV_AUTH
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: winterchill-s3, key: AWS_ACCESS_KEY_ID }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
+          ports:
+            - name: http
+              containerPort: 9100
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 4
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/market-recorder
+            - name: config
+              mountPath: /etc/market-recorder
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: winterchill-recorder-hyperliquid
+        - name: config
+          configMap:
+            name: winterchill-recorder-hyperliquid
+        - name: tmp
+          emptyDir: {}
+
+---
+# Source: winterchill/templates/sims.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-hl-sim
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: hl-sim
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: hl-sim
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: sim
+          image: ghcr.io/winterchill-trading/hl-sim:local
+          imagePullPolicy: IfNotPresent
+          args: ["-port", "3000", "-seed", "42"]
+          ports:
+            - name: http
+              containerPort: 3000
+          # POST probe: httpGet cannot send a body.
+          readinessProbe:
+            exec:
+              command: ["curl", "-sf", "-d", "{\"type\":\"meta\"}", "http://localhost:3000/info"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["curl", "-sf", "-d", "{\"type\":\"meta\"}", "http://localhost:3000/info"]
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+# Source: winterchill/templates/sims.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-binance-sim
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: binance-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: binance-sim
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: binance-sim
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: sim
+          image: ghcr.io/winterchill-trading/binance-sim:local
+          imagePullPolicy: IfNotPresent
+          args: ["-port", "3300", "-seed", "42"]
+          ports:
+            - name: http
+              containerPort: 3300
+          readinessProbe:
+            httpGet: { path: /fapi/v1/ping, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /fapi/v1/ping, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+# Source: winterchill/templates/sims.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-bybit-sim
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: bybit-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: bybit-sim
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: bybit-sim
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: sim
+          image: ghcr.io/winterchill-trading/bybit-sim:local
+          imagePullPolicy: IfNotPresent
+          args: ["-port", "3400", "-seed", "42"]
+          ports:
+            - name: http
+              containerPort: 3400
+          readinessProbe:
+            httpGet: { path: /v5/market/time, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /v5/market/time, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+# Source: winterchill/templates/day-close-cronjob.yaml
+# Converts yesterday's norm/ event logs on this venue's buffer volume into
+# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: winterchill-day-close-binance
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: day-close
+    winterchill/venue: binance
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/instance: winterchill
+            app.kubernetes.io/name: day-close
+            winterchill/venue: binance
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+          # The buffer volume is ReadWriteOnce: run next to the recorder.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/instance: winterchill
+                      app.kubernetes.io/name: market-recorder
+                      winterchill/venue: binance
+          initContainers:
+            - name: day-close
+              image: ghcr.io/winterchill-trading/market-data:local
+              imagePullPolicy: IfNotPresent
+              args: ["day-close", "-dir", "/var/lib/market-recorder"]
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+          containers:
+            - name: upload
+              image: rclone/rclone:1.71.1
+              args:
+                - copy
+                - "/var/lib/market-recorder"
+                - "s3:market-data"
+                - --include
+                - "**/parquet/**"
+              env:
+                - name: RCLONE_CONFIG_S3_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_S3_PROVIDER
+                  value: "Minio"
+                - name: RCLONE_CONFIG_S3_REGION
+                  value: "us-east-1"
+                - name: RCLONE_CONFIG_S3_ENDPOINT
+                  value: "http://host.rancher-desktop.internal:9000"
+                - name: RCLONE_CONFIG_S3_ENV_AUTH
+                  value: "true"
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: { name: winterchill-s3, key: AWS_ACCESS_KEY_ID }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: winterchill-recorder-binance
+            - name: tmp
+              emptyDir: {}
+---
+# Source: winterchill/templates/day-close-cronjob.yaml
+# Converts yesterday's norm/ event logs on this venue's buffer volume into
+# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: winterchill-day-close-bybit
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: day-close
+    winterchill/venue: bybit
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/instance: winterchill
+            app.kubernetes.io/name: day-close
+            winterchill/venue: bybit
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+          # The buffer volume is ReadWriteOnce: run next to the recorder.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/instance: winterchill
+                      app.kubernetes.io/name: market-recorder
+                      winterchill/venue: bybit
+          initContainers:
+            - name: day-close
+              image: ghcr.io/winterchill-trading/market-data:local
+              imagePullPolicy: IfNotPresent
+              args: ["day-close", "-dir", "/var/lib/market-recorder"]
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+          containers:
+            - name: upload
+              image: rclone/rclone:1.71.1
+              args:
+                - copy
+                - "/var/lib/market-recorder"
+                - "s3:market-data"
+                - --include
+                - "**/parquet/**"
+              env:
+                - name: RCLONE_CONFIG_S3_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_S3_PROVIDER
+                  value: "Minio"
+                - name: RCLONE_CONFIG_S3_REGION
+                  value: "us-east-1"
+                - name: RCLONE_CONFIG_S3_ENDPOINT
+                  value: "http://host.rancher-desktop.internal:9000"
+                - name: RCLONE_CONFIG_S3_ENV_AUTH
+                  value: "true"
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: { name: winterchill-s3, key: AWS_ACCESS_KEY_ID }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: winterchill-recorder-bybit
+            - name: tmp
+              emptyDir: {}
+---
+# Source: winterchill/templates/day-close-cronjob.yaml
+# Converts yesterday's norm/ event logs on this venue's buffer volume into
+# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: winterchill-day-close-hyperliquid
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: day-close
+    winterchill/venue: hyperliquid
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/instance: winterchill
+            app.kubernetes.io/name: day-close
+            winterchill/venue: hyperliquid
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+          # The buffer volume is ReadWriteOnce: run next to the recorder.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/instance: winterchill
+                      app.kubernetes.io/name: market-recorder
+                      winterchill/venue: hyperliquid
+          initContainers:
+            - name: day-close
+              image: ghcr.io/winterchill-trading/market-data:local
+              imagePullPolicy: IfNotPresent
+              args: ["day-close", "-dir", "/var/lib/market-recorder"]
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+          containers:
+            - name: upload
+              image: rclone/rclone:1.71.1
+              args:
+                - copy
+                - "/var/lib/market-recorder"
+                - "s3:market-data"
+                - --include
+                - "**/parquet/**"
+              env:
+                - name: RCLONE_CONFIG_S3_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_S3_PROVIDER
+                  value: "Minio"
+                - name: RCLONE_CONFIG_S3_REGION
+                  value: "us-east-1"
+                - name: RCLONE_CONFIG_S3_ENDPOINT
+                  value: "http://host.rancher-desktop.internal:9000"
+                - name: RCLONE_CONFIG_S3_ENV_AUTH
+                  value: "true"
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: { name: winterchill-s3, key: AWS_ACCESS_KEY_ID }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: winterchill-s3, key: AWS_SECRET_ACCESS_KEY }
+                - name: RCLONE_CONFIG
+                  value: /tmp/rclone.conf
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: winterchill-recorder-hyperliquid
+            - name: tmp
+              emptyDir: {}
