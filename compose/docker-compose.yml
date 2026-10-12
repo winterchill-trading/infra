@@ -145,6 +145,10 @@ services:
       RCLONE_CONFIG_MINIO_ENDPOINT: http://minio:9000
       RCLONE_CONFIG_MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # memtrace, off while empty; `make up-memtrace` sets both (see
+      # docs/runtime-tuning.md). The trace lands on the recorder volume.
+      MEMTRACE: ${RECORDER_MEMTRACE:-}
+      MEMTRACE_RATE: ${RECORDER_MEMTRACE_RATE:-}
     volumes:
       - ./recorder.sexp:/etc/market-recorder/recorder.sexp:ro
       - recorder-data:/var/lib/market-recorder
