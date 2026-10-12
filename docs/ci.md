@@ -202,3 +202,26 @@ re-pin step.
 Cold runs took 9 to 21 minutes, warm runs 1.5 to 2.5 minutes. A partial hit (hl-sim with
 hl-protocol pinned at an older commit, after both fixes) took 122 seconds in ox-setup and
 rebuilt only hl-protocol.
+
+## Obj.magic check
+
+`.github/workflows/obj-magic.yml` is a reusable workflow that runs
+`scripts/check-obj-magic.sh` from oxcaml-claude-skills over the calling repo. It fails
+when `Obj.magic`, `Obj.repr` or `Obj.obj` appears in a tracked `.ml`/`.mli` file that is
+not listed in the repo's `.obj-magic-allowlist` (one path or glob per line, relative to
+the scanned directory). Add it to a repo's `ci.yml` as its own job:
+
+```yaml
+jobs:
+  obj-magic:
+    uses: winterchill-trading/infra/.github/workflows/obj-magic.yml@main
+```
+
+- `working-directory` (default `.`): the directory to scan; its `.obj-magic-allowlist`
+  applies.
+- `skills-ref` (default `main`): branch, tag or commit of oxcaml-claude-skills to take
+  the script from.
+
+The script is fetched into `$RUNNER_TEMP`, outside the checkout, so it never scans
+itself. The job needs no OCaml switch and takes a few seconds. This repo's `ci.yml`
+calls it on `test-fixtures/obj-magic`, which holds an allowlisted cast.
