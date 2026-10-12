@@ -5,7 +5,8 @@
 # The repo is fetched from GitHub at REF, unless a local checkout is passed as
 # the `src` build context (`--build-context src=<dir>`, see build.sh), which is
 # what the Tiltfile does for live rebuilds. Sibling libraries are pinned from GitHub in
-# the order the repo's own CI pins them.
+# the order the repo's own CI pins them: at the commits build.sh resolved
+# (PINS), or at each sibling's default branch when PINS is empty.
 
 ARG BASE_IMAGE=ghcr.io/winterchill-trading/oxcaml-base:latest
 ARG RUNTIME_IMAGE=ubuntu:24.04
@@ -22,8 +23,11 @@ ADD --keep-git-dir=true https://github.com/${ORG}/${REPO}.git#${REF} /
 FROM ${BASE_IMAGE} AS build
 ARG REPO
 ARG BIN
-# Sibling pins track GitHub main; change this (build.sh passes the date) to
-# refetch them instead of reusing the cached layer.
+# "pkg=url#commit ..." from build.sh. Exact commits make the layer cache
+# follow the siblings: a moved sibling changes PINS and reinstalls.
+ARG PINS=""
+# Without PINS, siblings track their default branch; change this to refetch
+# them instead of reusing the cached layer.
 ARG PIN_EPOCH=0
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /home/opam/src
@@ -34,9 +38,13 @@ COPY --chown=1000:1000 --from=src /.github/workflows/ci.yml ./.github/workflows/
 # Pin siblings exactly as CI does: every `opam pin add <name> <url>` line.
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
     test -n "${REPO}" && test -n "${BIN}" \
- && echo "pins as of ${PIN_EPOCH}" \
- && grep -hoE 'opam pin add .*' .github/workflows/ci.yml \
-    | grep -oE '[a-z0-9_-]+ https://[^ ]+' \
+ && if [ -n "${PINS}" ]; then \
+      tr ' ' '\n' <<< "${PINS}" | sed 's/=/ /'; \
+    else \
+      echo "pins as of ${PIN_EPOCH}" >&2; \
+      grep -hoE 'opam pin add .*' .github/workflows/ci.yml \
+        | grep -oE '[a-z0-9_-]+ https://[^ ]+'; \
+    fi \
     | while read -r pkg url; do \
         echo "pin ${pkg} ${url}"; \
         opam pin add --no-action --yes "${pkg}" "${url}"; \
