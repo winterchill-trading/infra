@@ -160,6 +160,9 @@ Raw files stay as zstd ndjson; replaying them goes through
   `upload_pending` together. Normalized event logs are not uploaded and stay
   on the volume; prune `norm/` days older than a week after day-close has
   converted them.
+- Runbooks: [upgrading the recorder release](runbook-recorder-upgrade.md),
+  [troubleshooting](troubleshooting.md) (stale streams, `ss -tipn`, uploads during
+  DNS outages).
 - Deploys: `helm upgrade`; recorders use the `Recreate` strategy, so a
   deploy is a gap of a few seconds in that venue's stream, marked by the
   disconnect line the recorder writes at shutdown. Run a second replica on a
