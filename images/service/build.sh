@@ -14,7 +14,8 @@
 # Env:
 #   SRC=../hl-sim     build from a local checkout (tracked + untracked,
 #                     respecting .gitignore) instead of cloning REF
-#   REF=main          git ref to fetch when SRC is unset
+#   REF=main          git ref (branch, tag or full commit id) to fetch when SRC
+#                     is unset
 #   BASE_IMAGE=...    base image (default ghcr.io/winterchill-trading/oxcaml-base:latest)
 #   TAG=...           image tag (default ghcr.io/winterchill-trading/REPO:local,
 #                     plus REPO:<commit12> unless SRC has uncommitted changes)
@@ -34,8 +35,13 @@ tag=${TAG:-ghcr.io/${org}/${repo}:local}
 work=$(mktemp -d)
 trap 'rm -rf "${work}"' EXIT
 
+# A full commit id is returned as is: ls-remote only lists refs.
 remote_head() {
-  git ls-remote "$1" "$2" | awk 'NR == 1 { print $1 }'
+  if [[ $2 =~ ^[0-9a-f]{40}$ ]]; then
+    echo "$2"
+  else
+    git ls-remote "$1" "$2" | awk 'NR == 1 { print $1 }'
+  fi
 }
 
 if [[ -n ${SRC:-} ]]; then
