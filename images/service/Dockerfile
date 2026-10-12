@@ -4,41 +4,49 @@
 #
 #   docker buildx build --build-arg REPO=hl-sim --build-arg BIN=hl-sim images/service
 #
-# The repo is cloned from GitHub at REF, unless a local checkout is passed as
-# the `src` build context (`--build-context src=../hl-sim`), which is what the
-# Tiltfile does for live rebuilds. Sibling libraries are pinned from GitHub in
+# The repo is fetched from GitHub at REF, unless a local checkout is passed as
+# the `src` build context (`--build-context src=<dir>`, see build.sh), which is
+# what the Tiltfile does for live rebuilds. Sibling libraries are pinned from GitHub in
 # the order the repo's own CI pins them.
 
 ARG BASE_IMAGE=ghcr.io/winterchill-trading/oxcaml-base:latest
 ARG RUNTIME_IMAGE=ubuntu:24.04
 
-# Empty unless overridden with --build-context src=<path>.
+# Source tree. BuildKit re-checks the remote ref on every build, so a moved
+# branch is picked up; `--build-context src=<dir>` replaces this stage.
 FROM scratch AS src
+ARG ORG=winterchill-trading
+ARG REPO
+ARG REF=main
+ADD --keep-git-dir=true https://github.com/${ORG}/${REPO}.git#${REF} /
 
 # hadolint ignore=DL3006
 FROM ${BASE_IMAGE} AS build
 ARG REPO
 ARG BIN
-ARG REF=main
-ARG ORG=winterchill-trading
-WORKDIR /home/opam/src
-COPY --chown=1000:1000 --from=src / /home/opam/src/
+# Sibling pins track GitHub main; change this (build.sh passes the date) to
+# refetch them instead of reusing the cached layer.
+ARG PIN_EPOCH=0
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN test -n "${REPO}" && test -n "${BIN}" \
- && if [ ! -f dune-project ]; then \
-      git clone --depth 1 --branch "${REF}" "https://github.com/${ORG}/${REPO}.git" . ; \
-    fi \
- && { git rev-parse --short HEAD 2>/dev/null || echo local; } > /home/opam/revision
+WORKDIR /home/opam/src
+# Dependencies first, from the opam files and the CI pin list only, so a
+# source change does not reinstall them.
+COPY --chown=1000:1000 --from=src /*.opam ./
+COPY --chown=1000:1000 --from=src /.github/workflows/ci.yml ./.github/workflows/ci.yml
 # Pin siblings exactly as CI does: every `opam pin add <name> <url>` line.
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
-    grep -hoE 'opam pin add .*' .github/workflows/ci.yml \
+    test -n "${REPO}" && test -n "${BIN}" \
+ && echo "pins as of ${PIN_EPOCH}" \
+ && grep -hoE 'opam pin add .*' .github/workflows/ci.yml \
     | grep -oE '[a-z0-9_-]+ https://[^ ]+' \
     | while read -r pkg url; do \
         echo "pin ${pkg} ${url}"; \
         opam pin add --no-action --yes "${pkg}" "${url}"; \
       done \
  && opam install . --deps-only --yes
-RUN opam exec -- dune build --release @install \
+COPY --chown=1000:1000 --from=src / ./
+RUN { git rev-parse --short HEAD 2>/dev/null || echo local; } > /home/opam/revision \
+ && opam exec -- dune build --release @install \
  && mkdir -p /home/opam/out \
  && cp "_build/install/default/bin/${BIN}" /home/opam/out/service
 
