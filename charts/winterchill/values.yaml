@@ -73,7 +73,7 @@ dayClose:
   enabled: true
   image:
     repository: market-data
-    tag: c8121535e357
+    tag: 1977bfab1718
   # 00:20 UTC, after the day's last files have rolled.
   schedule: "20 0 * * *"
   # Upload the day's parquet/ tables after the close.
