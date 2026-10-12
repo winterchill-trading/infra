@@ -125,17 +125,38 @@ services:
         mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
         && mc mb --ignore-existing local/market-data
 
-  # TODO: enable once market-recorder ships its `run -config` command.
-  # market-recorder:
-  #   image: ghcr.io/winterchill-trading/market-recorder:local
-  #   build:
-  #     <<: *service-build
-  #     args:
-  #       <<: *service-args
-  #       REPO: market-recorder
-  #       BIN: market-recorder
-  #       RUNTIME_PACKAGES: rclone
-  #   command: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+  market-recorder:
+    image: ghcr.io/winterchill-trading/market-recorder:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: market-recorder
+        BIN: market-recorder
+        RUNTIME_PACKAGES: rclone
+    command: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+    restart: unless-stopped
+    environment:
+      RCLONE_CONFIG_MINIO_TYPE: s3
+      RCLONE_CONFIG_MINIO_PROVIDER: Minio
+      RCLONE_CONFIG_MINIO_ENDPOINT: http://minio:9000
+      RCLONE_CONFIG_MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ./recorder.sexp:/etc/market-recorder/recorder.sexp:ro
+      - recorder-data:/var/lib/market-recorder
+    ports: ["9100:9100"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9100/healthz"]
+      interval: 10s
+      start_period: 30s
+      retries: 6
+    depends_on:
+      hl-sim: { condition: service_healthy }
+      binance-sim: { condition: service_healthy }
+      bybit-sim: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
 
 volumes:
   minio-data:
+  recorder-data:
