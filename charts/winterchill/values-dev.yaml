@@ -1,0 +1,50 @@
+# Local profile (Rancher Desktop): simulators in-cluster, recorders pointed at
+# them, uploads into the MinIO from compose or any S3-compatible store.
+#
+#   helm install winterchill charts/winterchill -f charts/winterchill/values-dev.yaml
+
+imagePullPolicy: IfNotPresent
+
+recorder:
+  image:
+    tag: local
+  deleteAfterUpload: false
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  persistence:
+    size: 2Gi
+  venues:
+    - name: binance
+      venue: Binance
+      symbols: [BTCUSDT]
+      streams: [Trades, Bbo, L2]
+      endpoint: '(Custom (base_url http://{{ .Release.Name }}-binance-sim:3300))'
+    - name: bybit
+      venue: Bybit
+      symbols: [BTCUSDT]
+      streams: [Trades, Bbo, L2]
+      endpoint: '(Custom (base_url http://{{ .Release.Name }}-bybit-sim:3400))'
+    - name: hyperliquid
+      venue: Hyperliquid
+      symbols: [BTC]
+      streams: [Trades, L2]
+      endpoint: '(Custom (base_url http://{{ .Release.Name }}-hl-sim:3000))'
+
+s3:
+  bucket: market-data
+  region: us-east-1
+  provider: Minio
+  endpoint: http://host.rancher-desktop.internal:9000
+  accessKeyId: minioadmin
+  secretAccessKey: minioadmin
+
+dayClose:
+  image:
+    tag: local
+  schedule: "*/30 * * * *"
+
+sims:
+  enabled: true
+  image:
+    tag: local
