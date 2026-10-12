@@ -1,5 +1,14 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # Pinning hl-protocol at an older ref exercises the partial cache restore.
+  workflow_dispatch:
+    inputs:
+      hl-protocol-ref:
+        description: Commit or branch to pin hl-protocol at (default HEAD)
+        required: false
+        default: ""
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -52,7 +61,7 @@ jobs:
           pins: |
             fixed-decimal https://github.com/winterchill-trading/fixed-decimal.git
             exchange-core https://github.com/winterchill-trading/exchange-core.git
-            hl-protocol https://github.com/winterchill-trading/hl-protocol.git
+            hl-protocol https://github.com/winterchill-trading/hl-protocol.git${{ inputs.hl-protocol-ref && format('#{0}', inputs.hl-protocol-ref) || '' }}
             order-book https://github.com/winterchill-trading/order-book.git
             exchange-core-engine https://github.com/winterchill-trading/exchange-core.git
       - run: echo "switch cache ${{ steps.ox.outputs.cache-hit }} (${{ steps.ox.outputs.cache-key }})"
