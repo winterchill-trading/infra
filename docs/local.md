@@ -116,8 +116,8 @@ docker compose -f compose/docker-compose.yml logs day-close | grep -E 'FAIL|day-
 A failed check prints a `FAIL <check> <table> <violations>` line per failing
 assertion, the largest recv_ts gaps, then `day-close check FAILED`; the loop
 keeps running. The check covers every day in `parquet/`, so a gap from a stopped
-stack stays a violation until the stack has been up for a full day after it,
-or set `DAY_CLOSE_MAX_GAP` above the gap.
+stack stays a violation for as long as that day's tables are on the volume; raise
+`DAY_CLOSE_MAX_GAP` above it or drop the volume (`make down`).
 
 ### Socket, FD and RSS collectors
 
