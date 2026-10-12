@@ -100,6 +100,25 @@ MinIO's console is on http://localhost:9001 (`minioadmin` / `minioadmin`);
 `minio-init` creates the `market-data` bucket. Upstream MinIO no longer
 publishes images, so compose uses the community `pgsty/minio` build.
 
+### Day close and data-quality check
+
+`make up-day-close` builds the `market-data` image with the DuckDB CLI
+(`DUCKDB_VERSION`, default 1.5.6) and starts the `day-close` service under the
+compose profile of the same name. Every `DAY_CLOSE_INTERVAL` seconds (default
+3600) it runs `market-data day-close` on the recorder volume, then
+`market-data check -max-gap $DAY_CLOSE_MAX_GAP` (default `1m`) over the
+parquet tables. The result is in its log:
+
+```sh
+docker compose -f compose/docker-compose.yml logs day-close | grep -E 'FAIL|day-close check'
+```
+
+A failed check prints a `FAIL <check> <table> <violations>` line per failing
+assertion, the largest recv_ts gaps, then `day-close check FAILED`; the loop
+keeps running. The check covers every day in `parquet/`, so a gap from a stopped
+stack stays a violation until the stack has been up for a full day after it,
+or set `DAY_CLOSE_MAX_GAP` above the gap.
+
 ### Socket, FD and RSS collectors
 
 `make up-monitoring` adds three containers under the compose profile
@@ -152,7 +171,16 @@ Run a day close by hand instead of waiting for the schedule:
 ```sh
 kubectl create job --from=cronjob/winterchill-day-close-binance day-close-now
 kubectl logs -f job/day-close-now -c day-close
+kubectl logs -f job/day-close-now -c check
 ```
+
+The `check` container (`dayClose.check.enabled`, on by default) runs
+`market-data check -max-gap <dayClose.check.maxGap>` beside the upload once the
+close is done. Violations fail the Job (the upload still runs), so
+`kubectl get jobs -l app.kubernetes.io/name=day-close` shows it, and with
+kube-state-metrics installed `kube_job_status_failed{job_name=~".*day-close.*"} > 0`
+is the alert. The image needs DuckDB: build it with `make build-day-close` (or
+`service-images.yml`, which adds `DUCKDB_VERSION` for market-data).
 
 `charts/rendered-example.yaml` is `helm template` of the dev profile, kept in
 the repo for review; `make chart` regenerates it and CI fails if it is stale.
