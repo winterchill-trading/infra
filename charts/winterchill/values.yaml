@@ -51,9 +51,9 @@ s3:
   # Empty for AWS; set for MinIO or another S3-compatible store.
   endpoint: ""
   provider: AWS
-  # true: take credentials from the instance role / environment (rclone
-  # env_auth) and create no Secret.
-  useInstanceRole: false
+  # true: take credentials from the EC2 instance role (rclone env_auth) and
+  # create no Secret. The default, since production runs on EC2.
+  useInstanceRole: true
   # Use a pre-created Secret with keys AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
   existingSecret: ""
   accessKeyId: ""

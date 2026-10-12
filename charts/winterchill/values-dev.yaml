@@ -36,6 +36,7 @@ s3:
   region: us-east-1
   provider: Minio
   endpoint: http://host.rancher-desktop.internal:9000
+  useInstanceRole: false
   accessKeyId: minioadmin
   secretAccessKey: minioadmin
 
