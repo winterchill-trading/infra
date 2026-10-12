@@ -19,6 +19,14 @@ recorder:
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  # Statistical allocation profile (memtrace) of every recorder: sets MEMTRACE
+  # to <dataDir>/<file> on the data volume, so the trace survives a container
+  # restart until the next start overwrites it. See docs/runtime-tuning.md.
+  memtrace:
+    enabled: false
+    file: memtrace.ctf
+    # Sampled fraction of allocated words; 1e-4 suits captures of minutes to hours.
+    rate: "1e-4"
   persistence:
     size: 20Gi
     storageClassName: ""

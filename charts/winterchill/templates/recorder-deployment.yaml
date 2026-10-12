@@ -44,6 +44,15 @@ spec:
           args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
           env:
             {{- include "winterchill.rcloneEnv" $ | nindent 12 }}
+            {{- with $.Values.recorder.memtrace }}
+            {{- if .enabled }}
+            # Read by Memtrace.trace_if_requested at startup.
+            - name: MEMTRACE
+              value: {{ printf "%s/%s" $.Values.recorder.dataDir .file | quote }}
+            - name: MEMTRACE_RATE
+              value: {{ .rate | quote }}
+            {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ $.Values.recorder.httpPort }}
