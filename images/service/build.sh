@@ -6,7 +6,8 @@
 # Env:
 #   SRC=../hl-sim     build from a local checkout (tracked + untracked,
 #                     respecting .gitignore) instead of cloning REF
-#   REF=main          git ref to clone when SRC is unset
+#   REF=main          git ref to fetch when SRC is unset
+#   PIN_EPOCH=...     cache key for the sibling pins (default: today, UTC)
 #   BASE_IMAGE=...    base image (default ghcr.io/winterchill-trading/oxcaml-base:latest)
 #   TAG=...           image tag (default ghcr.io/winterchill-trading/REPO:local)
 #   PLATFORM=...      e.g. linux/amd64,linux/arm64 (default: host, loaded into docker)
@@ -25,6 +26,7 @@ args=(
   --build-arg "REPO=${repo}"
   --build-arg "BIN=${bin}"
   --build-arg "REF=${REF:-main}"
+  --build-arg "PIN_EPOCH=${PIN_EPOCH:-$(date -u +%Y%m%d)}"
   -t "${tag}"
 )
 [[ -n ${BASE_IMAGE:-} ]] && args+=(--build-arg "BASE_IMAGE=${BASE_IMAGE}")
