@@ -13,8 +13,27 @@ Install Rancher Desktop and open **Preferences**:
   `build.sh` (which calls `docker buildx`) does not do that for you.
 - **Kubernetes.** Enable it; any recent version works.
 - **Virtual machine.** The OxCaml compiler build needs memory: give the VM at
-  least 4 CPUs and 8 GB if you build the base image locally (it runs with 2
-  CPUs / 6 GB, just slowly).
+  least 4 CPUs and 8 GB if you build the base image locally. With 6 GB and
+  Kubernetes enabled the compiler build ran the VM out of memory (no swap by
+  default): the kernel killed cluster pods, the build failed with `failed to
+  solve: Unavailable: error reading from server: EOF`, and the host's
+  `~/.rd/docker.sock` forwarder stopped answering. Either raise the memory or
+  add swap on the VM's data disk before building (not on `/`, which is
+  tmpfs):
+
+  ```sh
+  rdctl shell sudo sh -c 'fallocate -l 6G /mnt/data/swap && chmod 600 /mnt/data/swap \
+    && mkswap /mnt/data/swap && swapon /mnt/data/swap'
+  ```
+
+  If the host socket is dead while `rdctl shell docker info` works, forward
+  it over Lima's ssh until Rancher Desktop is restarted:
+
+  ```sh
+  ssh -F ~/Library/Application\ Support/rancher-desktop/lima/0/ssh.config \
+    -fnNT -L ~/.rd/fwd.sock:/var/run/docker.sock lima-0
+  export DOCKER_HOST=unix://$HOME/.rd/fwd.sock
+  ```
 
 The CLIs (`docker`, `nerdctl`, `kubectl`, `helm`) live in `~/.rd/bin`; put it
 on `PATH`. Then:
