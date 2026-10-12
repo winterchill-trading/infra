@@ -1,0 +1,91 @@
+# Default values: production-style recorders against venue mainnets.
+# See values-dev.yaml for the local profile with simulators.
+
+imageRegistry: ghcr.io/winterchill-trading
+imagePullPolicy: IfNotPresent
+imagePullSecrets: []
+
+recorder:
+  image:
+    repository: market-recorder
+    tag: latest
+  # Directory inside the pod holding raw/ and norm/ files (the PVC mount).
+  dataDir: /var/lib/market-recorder
+  httpPort: 9100
+  # Deleting files once uploaded keeps the PVC a buffer, not an archive.
+  deleteAfterUpload: true
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  persistence:
+    size: 20Gi
+    storageClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  # One Deployment (and PVC, ConfigMap, Service) per entry. `endpoint` is the
+  # recorder's Endpoint sexp: Mainnet, Testnet, (Local (port N)) or
+  # (Custom (base_url URL)). Rendered with `tpl`, so {{ .Release.Name }} works.
+  venues:
+    - name: binance
+      venue: Binance
+      symbols: [BTCUSDT, ETHUSDT]
+      streams: [Trades, Bbo, L2, Funding]
+      endpoint: Mainnet
+    - name: bybit
+      venue: Bybit
+      symbols: [BTCUSDT, ETHUSDT]
+      streams: [Trades, Bbo, L2, Funding]
+      endpoint: Mainnet
+    - name: hyperliquid
+      venue: Hyperliquid
+      symbols: [BTC, ETH]
+      streams: [Trades, L2, Funding]
+      endpoint: Mainnet
+
+# Upload target for closed files, through rclone's S3 backend.
+s3:
+  bucket: winterchill-market-data
+  # Key prefix inside the bucket; files land at <prefix>/<rel path>.
+  prefix: ""
+  region: ap-northeast-1
+  # Empty for AWS; set for MinIO or another S3-compatible store.
+  endpoint: ""
+  provider: AWS
+  # true: take credentials from the instance role / environment (rclone
+  # env_auth) and create no Secret.
+  useInstanceRole: false
+  # Use a pre-created Secret with keys AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+  existingSecret: ""
+  accessKeyId: ""
+  secretAccessKey: ""
+
+dayClose:
+  enabled: true
+  image:
+    repository: market-data
+    tag: latest
+  # 00:20 UTC, after the day's last files have rolled.
+  schedule: "20 0 * * *"
+  # Upload the day's parquet/ tables after the close.
+  upload: true
+  rcloneImage: rclone/rclone:1.71.1
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+# Venue simulators, for the dev profile only.
+sims:
+  enabled: false
+  image:
+    tag: latest
+  seed: 42
+  list:
+    - name: hl-sim
+      port: 3000
+      probe: { path: /info, body: '{"type":"meta"}' }
+    - name: binance-sim
+      port: 3300
+      probe: { path: /fapi/v1/ping }
+    - name: bybit-sim
+      port: 3400
+      probe: { path: /v5/market/time }
