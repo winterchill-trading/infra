@@ -49,6 +49,9 @@ jobs:
           context: images/oxcaml-base
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.source=https://github.com/winterchill-trading/infra
+            org.opencontainers.image.description=OxCaml toolchain with the Jane Street library stack
           cache-from: type=gha,scope=oxcaml-base-${{ steps.arch.outputs.name }}
           cache-to: type=gha,mode=max,scope=oxcaml-base-${{ steps.arch.outputs.name }}
       - run: |

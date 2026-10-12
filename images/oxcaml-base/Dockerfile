@@ -12,6 +12,10 @@ ARG OPAM_VERSION=2.5.1
 ARG OX_REPO_COMMIT=afddc8337950dbc02863fe30ae58735a1cf2719f
 ARG OCAML_SWITCH=5.2.0+ox
 
+LABEL org.opencontainers.image.source="https://github.com/winterchill-trading/infra" \
+      org.opencontainers.image.description="OxCaml toolchain with the Jane Street library stack" \
+      org.opencontainers.image.licenses="MIT"
+
 ENV DEBIAN_FRONTEND=noninteractive \
     OPAMROOT=/home/opam/.opam \
     OPAMYES=1 \
