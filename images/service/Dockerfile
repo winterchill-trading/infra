@@ -44,10 +44,13 @@ RUN opam exec -- dune build --release @install \
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG REPO
 ARG BIN
+# Extra apt packages for the runtime, e.g. `rclone` for the recorder's
+# upload command.
+ARG RUNTIME_PACKAGES=""
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 \
+      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 ${RUNTIME_PACKAGES} \
  && rm -rf /var/lib/apt/lists/* \
  && userdel -r ubuntu 2>/dev/null || true \
  && useradd -r -u 10001 -m -d /var/lib/service service
