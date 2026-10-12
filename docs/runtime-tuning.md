@@ -84,3 +84,49 @@ Notes for wiring it into a service:
 - The trace path must be writable: in the chart the recorder's root filesystem is
   read-only, so point `MEMTRACE` at `/tmp` (an emptyDir) or the data volume, then copy
   it out with `kubectl cp`. View it with `memtrace-viewer` on a workstation.
+
+## Tracing the recorder
+
+The wiring only sets the environment; the recorder binary must call
+`Memtrace.trace_if_requested ()` at startup for a trace to appear. As of
+2026-10-12 market-recorder does not link memtrace yet, so the variables below are
+inert until it does (an empty `MEMTRACE` is a no-op either way).
+
+Compose. The recorder always gets `MEMTRACE` and `MEMTRACE_RATE` from
+`RECORDER_MEMTRACE` and `RECORDER_MEMTRACE_RATE`, empty by default. It is not a
+compose profile: profiles add services, and a second recorder service would record
+into the same volume twice.
+
+```sh
+make up-memtrace                    # recreate the recorder with MEMTRACE_RATE=1e-4
+make up-memtrace MEMTRACE_RATE=1e-3 # denser sample, for a short capture
+# ... let it run ...
+make memtrace-pull                  # ./memtrace.ctf (git-ignored)
+make up                             # back to no tracing
+```
+
+Helm. `--set recorder.memtrace.enabled=true` (and `recorder.memtrace.rate`) sets
+`MEMTRACE=<dataDir>/memtrace.ctf` on every recorder. The file is on the PVC, so it
+survives a crash or an OOM kill, but the next start overwrites it: copy it out
+before a restart.
+
+```sh
+helm upgrade winterchill charts/winterchill -f charts/winterchill/values-dev.yaml \
+  --set recorder.memtrace.enabled=true
+kubectl cp deploy/winterchill-recorder-binance:/var/lib/market-recorder/memtrace.ctf memtrace.ctf
+```
+
+The trace is written as it goes (buffered), so copying it from a running process
+gives a usable prefix; stopping the process flushes the rest.
+
+Reading it, on a workstation with the ox switch:
+
+- `memtrace-viewer memtrace.ctf` (opam package `memtrace_viewer`) serves an
+  interactive flame graph of live and allocated words by call site on
+  http://localhost:8080. Start with "live" at the end of the trace for a leak,
+  "allocations" for GC pressure.
+- The `memtrace` package installs command-line readers: `memtrace_hotspots`
+  (heaviest allocation sites), `memtrace_flamegraph` (folded stacks for
+  `flamegraph.pl` or speedscope) and `memtrace_dump_trace` (every event).
+- Sizes in the viewer are sampled and scaled back up by `1 / rate`; with
+  `1e-4` an allocation site needs about 10k words allocated to appear at all.
