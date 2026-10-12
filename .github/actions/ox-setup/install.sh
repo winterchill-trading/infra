@@ -18,8 +18,22 @@ test_flag=()
 # not a no-op: the 0install solver that setup-ocaml selects can pick other
 # versions than the installed ones (sedlex 3.7+ox -> 3.6+ox under core_bench),
 # and the recompile then fails to refetch git pins from the restored sources.
+# System packages (depexts such as libsecp256k1-dev) live outside the cached
+# switch, so they are installed on every run from the restored switch's
+# package list.
+install_depexts() {
+  local pkgs
+  pkgs=$(opam list --installed --depexts 2>/dev/null | tr '\n' ' ')
+  if [[ -n ${pkgs// /} ]] && command -v apt-get >/dev/null; then
+    echo "Installing system packages: ${pkgs}"
+    # shellcheck disable=SC2086
+    sudo apt-get install -y --no-install-recommends ${pkgs}
+  fi
+}
+
 if [[ ${CACHE_HIT} == true ]]; then
   echo "Exact cache hit: dependencies already installed"
+  install_depexts
   exit 0
 fi
 

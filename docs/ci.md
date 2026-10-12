@@ -93,8 +93,10 @@ after the dependencies install, so a failing build or test still leaves a warm c
 
 Restore order:
 
-1. **exact**: same key. Nothing is pinned or installed; `opam install --deps-only` runs
-   as a no-op check.
+1. **exact**: same key. Nothing is pinned or installed. Only the system packages the
+   installed opam packages declare (`opam list --installed --depexts`) are installed
+   with apt, because they live outside the cached switch (`libsecp256k1-dev` for
+   `hl-client`).
 2. **partial**: the newest entry with the same compiler, ox commit and pin names
    (`restore-keys` stops before the pin commits). The switch remembers the commits it
    was built with (`_opam/.ox-setup-pins`); the action re-pins, `opam reinstall`s only
@@ -118,7 +120,7 @@ Restore order:
   last dozen.
 - `ubuntu-latest` moving to a new Ubuntu release (`ImageOS`, e.g. `ubuntu24`): full
   miss. Weekly image updates within a release keep the key.
-- An exact hit runs no opam command at all. It used to run `opam install --deps-only` as
+- An exact hit runs no opam install or pin at all. It used to run `opam install --deps-only` as
   a "no-op" check, but setup-ocaml selects the `builtin-0install` solver, which on a
   populated switch picked sedlex 3.6+ox over the installed 3.7+ox (sedlex comes in
   through core_bench -> command_nodejs -> js_of_ocaml-compiler, so only repos with
