@@ -120,6 +120,19 @@ The `ox-setup-hl-sim` job in this repo's CI runs the action against an hl-sim ch
 | cold, compiler not cached (new ox url) | 957 | 0 | 971 | 27 | 17 | 1973 |
 | cold, compiler cached | 43 | 0 | 959 | 27 | 16 | 1046 |
 | warm, exact hit | 34 | 31 | 2 | - | 23 | 91 |
+| partial: hl-protocol pinned two commits back (dispatch input) | 40 | 55 | 27 | 26 | 14 | 163 |
+
+In the partial run only hl-protocol was rebuilt (`opam reinstall hl-protocol`, nothing
+in the switch depends on it); a moved fixed-decimal would rebuild the four pins above it
+as well. Run `gh workflow run ci.yml -f hl-protocol-ref=<commit>` to repeat it.
+
+hl-sim is the pilot: its own `ci.yml` uses the action since 2026-10-12.
+
+| hl-sim CI | setup-ocaml | restore | pins + deps | save | dune build + test | Job |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| before, setup-ocaml + `opam pin add` | 36-43 | - | 948-954 | - | ~15 | ~1020 |
+| first run, compiler not cached (pinned ox url) | 1014 | 0 | 969 | 28 | 15 | 2028 |
+| warm, exact hit (rerun) | 39 | 47 | 2 | - | 27 | 117 |
 
 The saved switch is 2.5 GB (zstd tarball; setup-ocaml's compiler-only entry is
 1.0 GB) and restores in about 30 seconds. Before the action hl-sim's CI took about
