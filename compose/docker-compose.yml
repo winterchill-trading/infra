@@ -107,7 +107,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports: ["${MINIO_PORT:-9000}:9000", "${MINIO_CONSOLE_PORT:-9001}:9001"]
+    ports: ["${MINIO_PORT:-9000}:9000", "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"]
     volumes: ["minio-data:/data"]
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -169,11 +169,13 @@ services:
   cadvisor:
     image: ghcr.io/google/cadvisor:v0.60.6
     profiles: [monitoring]
-    privileged: true
+    # Not privileged: reading other processes' /proc/<pid>/fd needs
+    # SYS_PTRACE, and cgroup and mount stats need SYS_ADMIN.
+    cap_add: [SYS_ADMIN, SYS_PTRACE]
+    # Without /dev/kmsg (privileged only) cadvisor just skips OOM events.
     # FD and socket counts come from /proc/<pid>/fd of each container's
     # processes, which only the host PID namespace shows.
     pid: host
-    devices: [/dev/kmsg]
     command:
       - --docker_only=true
       - --housekeeping_interval=5s
@@ -189,11 +191,12 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    ports: ["${CADVISOR_PORT:-8088}:8080"]
+    ports: ["127.0.0.1:${CADVISOR_PORT:-8088}:8080"]
 
   # node-exporter: the Docker VM (or host) as a whole: node_sockstat_*,
   # node_netstat_Tcp_*, node_tcp_connection_states, node_filefd_allocated.
-  # Host network so it sees the host's sockets, hence its own port.
+  # Host network so it sees the host's sockets, hence its own port, bound to
+  # loopback so it is not reachable from the LAN.
   node-exporter:
     image: quay.io/prometheus/node-exporter:v1.12.1
     profiles: [monitoring]
@@ -201,22 +204,24 @@ services:
     pid: host
     command:
       - --path.rootfs=/host
-      - --web.listen-address=:${NODE_EXPORTER_PORT:-9101}
+      - --web.listen-address=127.0.0.1:${NODE_EXPORTER_PORT:-9101}
       - --collector.tcpstat
       - --collector.processes
     volumes: ["/:/host:ro,rslave"]
 
-  # Keeps 5 s samples of the three above for a day.
+  # Keeps 5 s samples of the three above for a day. Host network, like
+  # node-exporter, so it reaches the loopback-only listeners; it scrapes the
+  # default host ports (see prometheus.yml).
   prometheus:
     image: quay.io/prometheus/prometheus:v3.15.0
     profiles: [monitoring]
+    network_mode: host
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=1d
+      - --web.listen-address=127.0.0.1:${PROMETHEUS_PORT:-9090}
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    extra_hosts: ["host.docker.internal:host-gateway"]
-    ports: ["${PROMETHEUS_PORT:-9090}:9090"]
 
 volumes:
   minio-data:
