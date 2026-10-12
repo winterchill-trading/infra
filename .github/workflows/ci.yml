@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f compose/docker-compose.yml config -q
+      - run: docker compose -f compose/docker-compose.yml --profile '*' config -q
   # Exercises the ox-setup action on a real consumer; the step timings of
   # this job are the cold and warm numbers in docs/ci.md.
   ox-setup-hl-sim:
