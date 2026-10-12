@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-#
 # Generic service image for one winterchill-trading binary.
 #
 #   docker buildx build --build-arg REPO=hl-sim --build-arg BIN=hl-sim images/service
