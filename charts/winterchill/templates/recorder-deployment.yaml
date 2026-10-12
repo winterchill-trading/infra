@@ -1,0 +1,89 @@
+{{- range .Values.recorder.venues }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-recorder-{{ .name }}
+  labels:
+    {{- include "winterchill.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: {{ .name }}
+spec:
+  replicas: 1
+  # One writer per buffer volume: never run old and new pods side by side.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/name: market-recorder
+      winterchill/venue: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/name: market-recorder
+        winterchill/venue: {{ .name }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/recorder-configmap.yaml") $ | sha256sum }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: recorder
+          image: {{ include "winterchill.image" (dict "root" $ "image" $.Values.recorder.image) }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          args: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+          env:
+            {{- include "winterchill.rcloneEnv" $ | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $.Values.recorder.httpPort }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 4
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          resources:
+            {{- toYaml $.Values.recorder.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: {{ $.Values.recorder.dataDir }}
+            - name: config
+              mountPath: /etc/market-recorder
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $.Release.Name }}-recorder-{{ .name }}
+        - name: config
+          configMap:
+            name: {{ $.Release.Name }}-recorder-{{ .name }}
+        - name: tmp
+          emptyDir: {}
+      {{- with $.Values.recorder.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.recorder.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
