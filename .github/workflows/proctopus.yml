@@ -1,0 +1,35 @@
+name: proctopus
+# Manual: builds proctopus (a terminal UI that runs several processes) on
+# Linux with the ox switch and starts it under a pseudo-terminal, to see
+# whether it can run the local stack natively. Result in docs/local.md.
+on:
+  workflow_dispatch:
+jobs:
+  try:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: stub opam file depending on proctopus
+        run: |
+          mkdir -p _proctopus
+          cat > _proctopus/proctopus-try.opam <<'OPAM'
+          opam-version: "2.0"
+          depends: [ "proctopus" ]
+          OPAM
+      - id: ox
+        uses: ./.github/actions/ox-setup
+        with:
+          working-directory: _proctopus
+          with-test: "false"
+      - run: opam exec -- proctopus -help
+      - name: start it under a pseudo-terminal for 15 seconds
+        run: |
+          set +e
+          TERM=xterm-256color script -qec \
+            "timeout 15 opam exec -- proctopus 'sims/a:sleep 60' 'sims/b:while true; do date; sleep 1; done' -n 'jobs/c:echo done'" \
+            /tmp/proctopus.typescript
+          code=$?
+          echo "exit ${code} (124: still running when the timeout hit)"
+          tail -c 2000 /tmp/proctopus.typescript | cat -v | tail -20
+          test "${code}" -eq 124
