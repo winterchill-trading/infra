@@ -14,24 +14,35 @@ state=_opam/.ox-setup-pins
 test_flag=()
 [[ ${WITH_TEST} == true ]] && test_flag=(--with-test)
 
-if [[ ${CACHE_HIT} != true ]]; then
-  changed=()
-  while read -r name target; do
-    opam pin add --no-action --yes "${name}" "${target}"
-    if [[ -f ${state} ]] && ! grep -qxF "${name} ${target}" "${state}"; then
-      changed+=("${name}")
-    fi
-  done < "${PIN_FILE}"
-  installed=()
-  for name in "${changed[@]+"${changed[@]}"}"; do
-    if opam list --installed --short --silent "${name}"; then
-      installed+=("${name}")
-    fi
-  done
-  if [[ ${#installed[@]} -gt 0 ]]; then
-    echo "Rebuilding moved pins: ${installed[*]}"
-    opam reinstall --yes "${installed[@]}"
+# An exact hit already holds everything the key describes. Re-solving it is
+# not a no-op: the 0install solver that setup-ocaml selects can pick other
+# versions than the installed ones (sedlex 3.7+ox -> 3.6+ox under core_bench),
+# and the recompile then fails to refetch git pins from the restored sources.
+if [[ ${CACHE_HIT} == true ]]; then
+  echo "Exact cache hit: dependencies already installed"
+  exit 0
+fi
+
+# mccs keeps installed versions where it can, so a partial hit only rebuilds
+# what moved.
+export OPAMEXTERNALSOLVER=builtin-mccs+glpk
+
+changed=()
+while read -r name target; do
+  opam pin add --no-action --yes "${name}" "${target}"
+  if [[ -f ${state} ]] && ! grep -qxF "${name} ${target}" "${state}"; then
+    changed+=("${name}")
   fi
+done < "${PIN_FILE}"
+installed=()
+for name in "${changed[@]+"${changed[@]}"}"; do
+  if opam list --installed --short --silent "${name}"; then
+    installed+=("${name}")
+  fi
+done
+if [[ ${#installed[@]} -gt 0 ]]; then
+  echo "Rebuilding moved pins: ${installed[*]}"
+  opam reinstall --yes "${installed[@]}"
 fi
 
 opam install --yes --deps-only "${test_flag[@]+"${test_flag[@]}"}" "./${WORKDIR#./}"
