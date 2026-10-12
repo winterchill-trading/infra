@@ -2,7 +2,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f compose/docker-compose.yml
 BASE_IMAGE ?= ghcr.io/winterchill-trading/oxcaml-base:latest
 
-.PHONY: base build build-day-close up up-monitoring up-day-close down logs ps lint chart pins
+.PHONY: base build build-day-close up up-monitoring up-day-close up-memtrace memtrace-pull down logs ps lint chart pins
 
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
@@ -28,6 +28,16 @@ up: build ## build the images and start the local stack
 
 up-monitoring: up ## also start cadvisor, node-exporter and Prometheus
 	$(COMPOSE) --profile monitoring up -d
+
+MEMTRACE_FILE := /var/lib/market-recorder/memtrace.ctf
+MEMTRACE_RATE ?= 1e-4
+
+up-memtrace: ## restart the recorder with memtrace writing to its volume
+	RECORDER_MEMTRACE=$(MEMTRACE_FILE) RECORDER_MEMTRACE_RATE=$(MEMTRACE_RATE) \
+	  $(COMPOSE) up -d --force-recreate --no-deps market-recorder
+
+memtrace-pull: ## copy the recorder's trace to ./memtrace.ctf
+	$(COMPOSE) cp market-recorder:$(MEMTRACE_FILE) memtrace.ctf
 
 up-day-close: up build-day-close ## also run day-close and market-data check on a loop
 	$(COMPOSE) --profile day-close up -d
