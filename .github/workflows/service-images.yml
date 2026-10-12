@@ -70,6 +70,8 @@ jobs:
         run: |
           extra=()
           [[ ${REPO} == market-recorder ]] && extra+=(--build-arg RUNTIME_PACKAGES=rclone)
+          # `market-data check` runs in the day-close job and shells out to duckdb.
+          [[ ${REPO} == market-data ]] && extra+=(--build-arg DUCKDB_VERSION=1.5.6)
           images/service/build.sh "${REPO}" "${REPO}" "${extra[@]}" \
             --output "type=image,push-by-digest=true,name-canonical=true,push=true" \
             --metadata-file /tmp/meta.json
