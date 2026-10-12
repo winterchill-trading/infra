@@ -96,7 +96,7 @@ Restore order:
 1. **exact**: same key. Nothing is pinned or installed. Only the system packages the
    installed opam packages declare (`opam list --installed --depexts`) are installed
    with apt, because they live outside the cached switch (`libsecp256k1-dev` for
-   `hl-client`).
+   `hl-client`). A partial hit installs them too, before rebuilding moved pins.
 2. **partial**: the newest entry with the same compiler, ox commit and pin names
    (`restore-keys` stops before the pin commits). The switch remembers the commits it
    was built with (`_opam/.ox-setup-pins`); the action re-pins, `opam reinstall`s only

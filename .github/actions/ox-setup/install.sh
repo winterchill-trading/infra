@@ -37,6 +37,10 @@ if [[ ${CACHE_HIT} == true ]]; then
   exit 0
 fi
 
+# A partial hit rebuilds moved pins, which may link against system libraries
+# (hl-client needs libsecp256k1); those live outside the cached switch.
+install_depexts
+
 # mccs keeps installed versions where it can, so a partial hit only rebuilds
 # what moved.
 export OPAMEXTERNALSOLVER=builtin-mccs+glpk
