@@ -141,10 +141,11 @@ The parquet tables are directly queryable from S3:
 - **Athena**: one Glue table per parquet table, partitioned by
   `venue`/`symbol` using partition projection over the key layout
   (`<venue>/<symbol>/parquet/trades/`), with the date taken from the file
-  name. Note that prices and sizes are `DECIMAL(18,8)` and timestamps are
-  `TIMESTAMP_NS` (`isAdjustedToUTC=false`); Athena (Trino) reads nanosecond
-  timestamps as `timestamp(9)` only through the Iceberg/Hive v3 path, so
-  either query through DuckDB or cast in a view.
+  name. Prices and sizes are `DECIMAL(18,8)` and timestamps are Parquet
+  `TIMESTAMP(NANOS, isAdjustedToUTC=false)`. Verify how the Athena engine
+  version in use maps nanosecond timestamps before building on it; if it
+  truncates or rejects them, query through DuckDB or expose a view that
+  casts.
 
 Raw files stay as zstd ndjson; replaying them goes through
 `market-data` (`Replay_feed`) after downloading the needed minutes, or
