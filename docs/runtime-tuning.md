@@ -122,9 +122,9 @@ gives a usable prefix; stopping the process flushes the rest.
 Reading it, on a workstation with the ox switch:
 
 - `memtrace-viewer memtrace.ctf` (opam package `memtrace_viewer`) serves an
-  interactive flame graph of live and allocated words by call site on
-  http://localhost:8080. Start with "live" at the end of the trace for a leak,
-  "allocations" for GC pressure.
+  interactive view of allocated and live words by call site in the browser (it
+  prints the URL). Live words near the end of the trace point at a leak;
+  allocated words at GC pressure.
 - The `memtrace` package installs command-line readers: `memtrace_hotspots`
   (heaviest allocation sites), `memtrace_flamegraph` (folded stacks for
   `flamegraph.pl` or speedscope) and `memtrace_dump_trace` (every event).
