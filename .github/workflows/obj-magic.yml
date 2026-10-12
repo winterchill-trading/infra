@@ -1,0 +1,38 @@
+# Reusable workflow: fails when Obj.magic, Obj.repr or Obj.obj appears in the
+# calling repo's OCaml sources outside its .obj-magic-allowlist. Call it with
+#
+#   jobs:
+#     obj-magic:
+#       uses: winterchill-trading/infra/.github/workflows/obj-magic.yml@main
+#
+# The check itself is scripts/check-obj-magic.sh in oxcaml-claude-skills.
+name: obj-magic
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Directory to scan, relative to the repo root (its .obj-magic-allowlist applies)
+        type: string
+        required: false
+        default: .
+      skills-ref:
+        description: Branch, tag or commit of oxcaml-claude-skills to take the script from
+        type: string
+        required: false
+        default: main
+jobs:
+  obj-magic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Fetched outside the workspace so the scan never sees the script's own repo.
+      - name: fetch check-obj-magic.sh
+        env:
+          SKILLS_REF: ${{ inputs.skills-ref }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/check-obj-magic.sh" \
+            "https://raw.githubusercontent.com/winterchill-trading/oxcaml-claude-skills/$SKILLS_REF/scripts/check-obj-magic.sh"
+      - name: check-obj-magic
+        env:
+          SCAN_DIR: ${{ inputs.working-directory }}
+        run: bash "$RUNNER_TEMP/check-obj-magic.sh" "$SCAN_DIR"
