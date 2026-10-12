@@ -100,6 +100,29 @@ MinIO's console is on http://localhost:9001 (`minioadmin` / `minioadmin`);
 `minio-init` creates the `market-data` bucket. Upstream MinIO no longer
 publishes images, so compose uses the community `pgsty/minio` build.
 
+### proctopus instead of compose: tried, not adopted
+
+proctopus (a terminal UI that runs and restarts several processes, with a log
+pane per process and `-log DIR` to tee output to files) was tried on 2026-10-12
+as a way to run the three simulators, the market makers and the recorder as
+native processes.
+
+- macOS: does not build. `opam install proctopus` on the `5.2.0+ox` switch fails in
+  its dependency `mmap` (`mremap`, `off64_t` and `MADV_*` are Linux-only), and
+  `procfs` reads `/proc`. The opam files do not mark either as Linux-only, so opam
+  only finds out at compile time.
+- Linux: builds and runs. The manual `proctopus` workflow
+  (`gh workflow run proctopus.yml`) installs it with the ox-setup action on
+  `ubuntu-latest` (24 minutes cold, 53 packages, Bonsai and its web
+  dependencies included) and keeps it running under a pseudo-terminal with three
+  commands for 15 seconds.
+
+Compose stays the local stack: it runs on macOS through Rancher Desktop, and the
+stack needs MinIO, the image pins and the container network anyway. proctopus is
+worth another look for a Linux workstation running the binaries straight from
+`dune build` (no image rebuilds): one `name:command` argument per service, e.g.
+`proctopus 'sims/hl:hl-sim -port 3000' 'sims/binance:binance-sim -port 3300' ...`.
+
 ### Day close and data-quality check
 
 `make up-day-close` builds the `market-data` image with the DuckDB CLI
