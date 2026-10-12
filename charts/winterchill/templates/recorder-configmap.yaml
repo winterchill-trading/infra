@@ -1,0 +1,23 @@
+{{- range .Values.recorder.venues }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Release.Name }}-recorder-{{ .name }}
+  labels:
+    {{- include "winterchill.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: {{ .name }}
+data:
+  recorder.sexp: |
+    ((data_dir {{ $.Values.recorder.dataDir }})
+     (http_port {{ $.Values.recorder.httpPort }})
+     (venues
+      (((venue {{ .venue }})
+        (symbols ({{ join " " .symbols }}))
+        (streams ({{ join " " .streams }}))
+        (config {{ tpl (toString .endpoint) $ }}))))
+     (upload
+      ((command (rclone copyto {file} {{ include "winterchill.s3Remote" $ }}/{rel}))
+       (delete_after_upload {{ $.Values.recorder.deleteAfterUpload }}))))
+{{- end }}
