@@ -42,8 +42,11 @@ fi
 install_depexts
 
 # mccs keeps installed versions where it can, so a partial hit only rebuilds
-# what moved.
-export OPAMEXTERNALSOLVER=builtin-mccs+glpk
+# what moved. On an empty switch it can fail ("Mip solver failure", exit 60)
+# for large dependency sets, so a miss keeps setup-ocaml's default solver.
+if [[ ${CACHE_RESTORED:-false} == true ]]; then
+  export OPAMEXTERNALSOLVER=builtin-mccs+glpk
+fi
 
 # Git checkouts of pins restored from the cache cannot be synchronised again
 # (opam looks for a refs/remotes/opam-ref-<commit> that is not there), so a
