@@ -79,6 +79,13 @@ make logs
 make down   # also drops the MinIO volume
 ```
 
+Host ports default to the in-container ones and can be moved when something
+else already listens there: `HL_SIM_PORT`, `BINANCE_SIM_PORT`,
+`BYBIT_SIM_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `RECORDER_PORT`, e.g.
+`HL_SIM_PORT=13000 make up`. The recorder answers on
+`localhost:9100/healthz` and `/metrics`; closed minute files appear in the
+bucket under `raw/<venue>/<stream>/<symbol>/...` within a minute of `up`.
+
 MinIO's console is on http://localhost:9001 (`minioadmin` / `minioadmin`);
 `minio-init` creates the `market-data` bucket. Upstream MinIO no longer
 publishes images, so compose uses the community `pgsty/minio` build.
