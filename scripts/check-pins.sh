@@ -12,6 +12,11 @@
 #   WORKSPACE=..    directory holding the sibling checkouts (default: the
 #                   parent of this infra checkout)
 #   ORG=winterchill-trading
+#   BASE_DOCKERFILE=images/oxcaml-base/Dockerfile   source of OX_REPO_COMMIT
+#
+# Every repo must also pin the ox opam repository at the base image's
+# OX_REPO_COMMIT: an `ox: ...opam-repository.git#<commit>` line, an
+# ox-setup `ox-repository:` input, or the ox-setup action's default.
 #
 # A sibling package is any package declared in a dune-project under
 # WORKSPACE. For each repo the required pins are the transitive sibling
@@ -121,6 +126,42 @@ parse_pins() {
     }' "$1"
 }
 
+base_dockerfile=${BASE_DOCKERFILE:-${here}/../images/oxcaml-base/Dockerfile}
+action_yml=${here}/../.github/actions/ox-setup/action.yml
+ox_want=$(sed -n 's/^ARG OX_REPO_COMMIT=\([0-9a-f]*\).*/\1/p' "${base_dockerfile}")
+if [[ -z ${ox_want} ]]; then
+  echo "no ARG OX_REPO_COMMIT in ${base_dockerfile}" >&2
+  exit 2
+fi
+
+# Print the commit of every ox repository the workflow uses, or "unpinned".
+ox_pins() {
+  local ci=$1
+  {
+    grep -oE 'oxcaml/opam-repository(\.git)?[^ "]*' "${ci}" || true
+    if grep -q 'actions/ox-setup' "${ci}" && ! grep -q 'ox-repository:' "${ci}"; then
+      grep -A4 '^  ox-repository:' "${action_yml}" | grep -oE 'oxcaml/opam-repository(\.git)?[^ "]*' || true
+    fi
+  } | while read -r url; do
+    if [[ ${url} == *#* ]]; then echo "${url##*#}"; else echo unpinned; fi
+  done
+}
+
+# check_ox NAME CI_FILE: fail unless every ox repository is at ox_want.
+check_ox() {
+  local name=$1 ci=$2 got bad=0
+  while read -r got; do
+    if [[ ${got} == unpinned ]]; then
+      echo "${name}: ox repository not pinned, expected #${ox_want}"
+      bad=1
+    elif [[ ${got} != "${ox_want}" ]]; then
+      echo "${name}: ox repository at ${got}, base image uses ${ox_want}"
+      bad=1
+    fi
+  done < <(ox_pins "${ci}")
+  return "${bad}"
+}
+
 graph=$(mktemp)
 trap 'rm -f "${graph}"' EXIT
 for d in "${workspace}"/*/; do
@@ -137,6 +178,7 @@ for repo_dir in "${repos[@]}"; do
     status=1
     continue
   fi
+  check_ox "${repo}" "${ci}" || status=1
   { cat "${graph}"; parse_pins "${ci}"; } | awk \
     -v repo="${repo}" -v org="${org}" -v suggest="${suggest}" '
     $1 == "PKG" { owner[$3] = $2; if ($2 == repo) own[$3] = 1; next }

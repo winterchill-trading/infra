@@ -55,10 +55,24 @@ steps:
         base-lib https://github.com/winterchill-trading/base.git
 YAML
 
+# ox repository pins, checked against a fixture base image at the same commit
+# as the real one, so the ox-setup action's default matches it.
+ox=$(sed -n 's/^ARG OX_REPO_COMMIT=//p' "${here}/../images/oxcaml-base/Dockerfile")
+printf 'FROM ubuntu:24.04\nARG OX_REPO_COMMIT=%s\n' "${ox}" > "${ws}/Dockerfile"
+ox_repo() {
+  local name=$1 line=$2
+  repo "${name}" "(package (name ${name}) (depends core))"
+  printf '%s\n' "  - uses: ocaml/setup-ocaml@v3" "    with:" "      opam-repositories: |" \
+    "        ox: ${line}" >> "${ws}/${name}/.github/workflows/ci.yml"
+}
+ox_repo ox-good "https://github.com/oxcaml/opam-repository.git#${ox}"
+ox_repo ox-old "https://github.com/oxcaml/opam-repository.git#$(printf 'b%.0s' {1..40})"
+ox_repo ox-unpinned "https://github.com/oxcaml/opam-repository.git"
+
 fail=0
 expect() {
   local name=$1 code=$2 want=$3 got rc=0
-  got=$(WORKSPACE=${ws} "${here}/check-pins.sh" -s "${ws}/${name}" 2>&1) || rc=$?
+  got=$(WORKSPACE=${ws} BASE_DOCKERFILE=${ws}/Dockerfile "${here}/check-pins.sh" -s "${ws}/${name}" 2>&1) || rc=$?
   if [[ ${rc} != "${code}" || ${got} != *"${want}"* ]]; then
     printf 'FAIL %s: exit %s, output:\n%s\n' "${name}" "${rc}" "${got}"
     fail=1
@@ -77,4 +91,7 @@ expect missing 1 "opam pin add -y -n base-lib https://github.com/winterchill-tra
       - run: opam pin add -y -n mid"
 expect action 0 "action: ok (3 sibling pins)"
 expect action-misordered 1 "pin mid comes before its dependency base-lib"
+expect ox-good 0 "ox-good: ok"
+expect ox-old 1 "ox-old: ox repository at bbbb"
+expect ox-unpinned 1 "ox-unpinned: ox repository not pinned, expected #${ox}"
 exit "${fail}"
