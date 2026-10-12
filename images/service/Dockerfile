@@ -15,6 +15,7 @@ ARG RUNTIME_IMAGE=ubuntu:24.04
 # Empty unless overridden with --build-context src=<path>.
 FROM scratch AS src
 
+# hadolint ignore=DL3006
 FROM ${BASE_IMAGE} AS build
 ARG REPO
 ARG BIN
@@ -41,6 +42,7 @@ RUN opam exec -- dune build --release @install \
  && mkdir -p /home/opam/out \
  && cp "_build/install/default/bin/${BIN}" /home/opam/out/service
 
+# hadolint ignore=DL3006
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG REPO
 ARG BIN
