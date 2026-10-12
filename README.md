@@ -10,3 +10,17 @@ OxCaml services (venue simulators, market maker, market recorder).
 | `compose/` | Local stack: simulators, market maker, recorder, MinIO |
 | `charts/winterchill/` | Helm chart for recorders and the daily close job |
 | `docs/` | Local (Rancher Desktop) and AWS notes |
+| `Tiltfile` | Live rebuild of service images on Rancher Desktop |
+
+## Quick start
+
+```sh
+docker pull ghcr.io/winterchill-trading/oxcaml-base:latest   # or: make base
+images/service/build.sh hl-sim hl-sim
+make up && make ps
+helm install winterchill charts/winterchill -f charts/winterchill/values-dev.yaml
+```
+
+See [docs/local.md](docs/local.md) for the macOS setup and
+[docs/aws.md](docs/aws.md) for the production topology. `make lint` runs the
+same checks as CI (hadolint, shellcheck, helm lint).
