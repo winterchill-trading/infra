@@ -42,8 +42,9 @@ RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 
       tr ' ' '\n' <<< "${PINS}" | sed 's/=/ /'; \
     else \
       echo "pins as of ${PIN_EPOCH}" >&2; \
-      grep -hoE 'opam pin add .*' .github/workflows/ci.yml \
-        | grep -oE '[a-z0-9_-]+ https://[^ ]+'; \
+      { grep -hoE 'opam pin add .*' .github/workflows/ci.yml || true; \
+        sed -n '/pins: |/,/^ *[^ ]*:/p' .github/workflows/ci.yml; } \
+        | grep -oE '^ *[a-z0-9_-]+ https://[^ $]+' | sed 's/^ *//'; \
     fi \
     | while read -r pkg url; do \
         echo "pin ${pkg} ${url}"; \
