@@ -171,6 +171,12 @@ done > "${graph}"
 
 status=0
 for repo_dir in "${repos[@]}"; do
+  # Resolve `.` and trailing slashes so the name matches the checkout.
+  if ! repo_dir=$(cd "${repo_dir}" 2>/dev/null && pwd); then
+    echo "${repo_dir}: no such directory" >&2
+    status=1
+    continue
+  fi
   repo=$(basename "${repo_dir}")
   ci=${repo_dir}/.github/workflows/ci.yml
   if [[ ! -f ${ci} ]]; then
