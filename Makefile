@@ -2,7 +2,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f compose/docker-compose.yml
 BASE_IMAGE ?= ghcr.io/winterchill-trading/oxcaml-base:latest
 
-.PHONY: base build up down logs ps lint chart pins
+.PHONY: base build up up-monitoring down logs ps lint chart pins
 
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
@@ -21,8 +21,11 @@ build: ## build every service image in the compose stack, labelled with its comm
 up: build ## build the images and start the local stack
 	$(COMPOSE) up -d
 
+up-monitoring: up ## also start cadvisor, node-exporter and Prometheus
+	$(COMPOSE) --profile monitoring up -d
+
 down: ## stop the stack and drop its volumes
-	$(COMPOSE) down -v --remove-orphans
+	$(COMPOSE) --profile monitoring down -v --remove-orphans
 
 logs:
 	$(COMPOSE) logs -f --tail=100

@@ -100,6 +100,31 @@ MinIO's console is on http://localhost:9001 (`minioadmin` / `minioadmin`);
 `minio-init` creates the `market-data` bucket. Upstream MinIO no longer
 publishes images, so compose uses the community `pgsty/minio` build.
 
+### Socket, FD and RSS collectors
+
+`make up-monitoring` adds three containers under the compose profile
+`monitoring` (`make down` removes them too):
+
+| Container | Port | What |
+| --- | --- | --- |
+| `cadvisor` | `CADVISOR_PORT` (8088) | per container: `container_sockets`, `container_file_descriptors`, `container_memory_rss`, `container_threads`, TCP connections by state (`container_network_tcp_usage_total`) |
+| `node-exporter` | `NODE_EXPORTER_PORT` (9101), host network | the Docker VM: `node_sockstat_TCP_inuse`, `node_netstat_Tcp_RetransSegs`, `node_tcp_connection_states`, `node_filefd_allocated` |
+| `prometheus` | `PROMETHEUS_PORT` (9090) | scrapes both and the recorder every 5 s, keeps a day |
+
+```sh
+curl -s localhost:8088/metrics | grep -E '^container_(sockets|file_descriptors|memory_rss)\{.*market-recorder'
+open 'http://localhost:9090/query?g0.expr=container_sockets'
+```
+
+In the cluster the chart runs node-exporter as a DaemonSet (`nodeExporter.enabled`);
+per-container sockets, FDs and RSS come from the kubelet's built-in cAdvisor, which
+k3s serves without extra pods:
+
+```sh
+kubectl get --raw /api/v1/nodes/$(kubectl get nodes -o name | head -1 | cut -d/ -f2)/proxy/metrics/cadvisor \
+  | grep -E '^container_(sockets|file_descriptors|memory_rss)\{.*recorder'
+```
+
 ## 4. Helm on Rancher Desktop
 
 The dev profile runs the simulators in the cluster and points the recorders

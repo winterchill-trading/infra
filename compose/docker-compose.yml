@@ -160,6 +160,64 @@ services:
       bybit-sim: { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }
 
+  # Collectors, under the `monitoring` profile (`make up-monitoring`): socket,
+  # FD and RSS history next to the recorder's own /metrics.
+  #
+  # cadvisor: per container. container_sockets, container_file_descriptors,
+  # container_memory_rss, container_threads, and TCP connections by state
+  # (container_network_tcp_usage_total, off by default in cadvisor).
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    profiles: [monitoring]
+    privileged: true
+    # FD and socket counts come from /proc/<pid>/fd of each container's
+    # processes, which only the host PID namespace shows.
+    pid: host
+    devices: [/dev/kmsg]
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=5s
+      - --enable_metrics=cpu,memory,network,process,tcp
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.service
+      # cadvisor reads Docker containers through containerd. Rancher Desktop's
+      # dockerd runs its own containerd here; on a Linux host with the system
+      # containerd use CADVISOR_CONTAINERD=/run/containerd/containerd.sock.
+      - --containerd=${CADVISOR_CONTAINERD:-/var/run/docker/containerd/containerd.sock}
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports: ["${CADVISOR_PORT:-8088}:8080"]
+
+  # node-exporter: the Docker VM (or host) as a whole: node_sockstat_*,
+  # node_netstat_Tcp_*, node_tcp_connection_states, node_filefd_allocated.
+  # Host network so it sees the host's sockets, hence its own port.
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    profiles: [monitoring]
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=:${NODE_EXPORTER_PORT:-9101}
+      - --collector.tcpstat
+      - --collector.processes
+    volumes: ["/:/host:ro,rslave"]
+
+  # Keeps 5 s samples of the three above for a day.
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.15.0
+    profiles: [monitoring]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=1d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["${PROMETHEUS_PORT:-9090}:9090"]
+
 volumes:
   minio-data:
   recorder-data:
