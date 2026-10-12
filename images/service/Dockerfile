@@ -52,6 +52,9 @@ RUN { git rev-parse --short HEAD 2>/dev/null || echo local; } > /home/opam/revis
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG REPO
 ARG BIN
+# Core's Time_ns reads /etc/localtime at startup and dies without it, so
+# tzdata is required; services run in UTC.
+ENV TZ=Etc/UTC
 # Extra apt packages for the runtime, e.g. `rclone` for the recorder's
 # upload command.
 ARG RUNTIME_PACKAGES=""
@@ -60,8 +63,9 @@ ARG RUNTIME_PACKAGES=""
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 ${RUNTIME_PACKAGES} \
+      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 tzdata ${RUNTIME_PACKAGES} \
  && rm -rf /var/lib/apt/lists/* \
+ && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
  && { userdel -r ubuntu 2>/dev/null || true; } \
  && useradd -r -u 10001 -m -d /var/lib/service service \
  && install -d -o 10001 -g 10001 "/var/lib/${REPO}"
