@@ -61,13 +61,19 @@ ENV OPAM_SWITCH_PREFIX=/home/opam/.opam/${OCAML_SWITCH} \
 
 # Library layer: union of the dependencies across the org's repos.
 # async_websocket must be the ox preview; plain resolution can pick the
-# empty v0.13.0 stub.
-RUN opam install \
-      dune core core_unix async async_ssl \
-      "async_websocket.v0.18~preview.130.106+341" \
+# empty v0.13.0 stub. Source downloads (GitHub archives) intermittently
+# answer 504, so retry the whole install a few times.
+# hadolint ignore=SC2086
+RUN pkgs="dune core core_unix async async_ssl \
+      async_websocket.v0.18~preview.130.106+341 \
       cohttp-async conduit-async uri yojson cryptokit zstd \
       ppx_jane ppx_expect ppx_inline_test ppx_yojson_conv \
-      base_quickcheck bin_prot \
+      base_quickcheck bin_prot" \
+ && for attempt in 1 2 3; do \
+      OPAMRETRIES=5 opam install ${pkgs} && break; \
+      if [ "${attempt}" = 3 ]; then exit 1; fi; \
+      echo "opam install failed (attempt ${attempt}), retrying" >&2; sleep 30; \
+    done \
  && opam clean -a -c -s --logs \
  && test -f "${OPAM_SWITCH_PREFIX}/lib/async_ssl/META" \
  && ls "${OPAM_SWITCH_PREFIX}"/lib/async_websocket/*.cmi > /dev/null
