@@ -96,9 +96,20 @@ parse_dune_project() {
     }' "$2"
 }
 
-# Emit "PIN <index> <package> <url>" for every `opam pin add` in a workflow.
+# Emit "PIN <index> <package> <url>" for every `opam pin add` in a workflow,
+# and for every "name url" line of an ox-setup `pins: |` block.
 parse_pins() {
   awk '
+    function indent(l) { match(l, /^ */); return RLENGTH }
+    in_block && /^[ \t]*$/ { next }
+    in_block && indent($0) <= block_indent { in_block = 0 }
+    in_block {
+      m = split($0, w, /[ \t]+/); k = 1
+      while (k <= m && w[k] == "") k++
+      if (k + 1 <= m && w[k] !~ /^#/) print "PIN", ++idx, w[k], w[k + 1]
+      next
+    }
+    /^[ \t]*pins:[ \t]*\|/ { in_block = 1; block_indent = indent($0); next }
     /opam pin add/ {
       sub(/.*opam pin add/, "")
       m = split($0, w, /[ \t]+/); got = 0

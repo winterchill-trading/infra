@@ -31,6 +31,29 @@ repo misordered '(package (name misordered) (depends mid))' "$(url mid mid)" "$(
 repo wrongurl '(package (name wrongurl) (depends base-lib))' "$(url base-lib mid)"
 repo two '(package (name two-a) (depends base-lib)) (package (name two-b) (depends two-a))' \
   "two-a=." "$(url base-lib base)"
+# The same pins as top, through the ox-setup action's pins block.
+repo action '(package (name action) (depends mid (sim :with-test)))'
+cat > "${ws}/action/.github/workflows/ci.yml" <<'YAML'
+steps:
+  - uses: winterchill-trading/infra/.github/actions/ox-setup@main
+    with:
+      pins: |
+        base-lib https://github.com/winterchill-trading/base.git
+
+        mid https://github.com/winterchill-trading/mid.git
+        sim https://github.com/winterchill-trading/sim.git
+      with-test: true
+  - run: opam exec -- dune build
+YAML
+repo action-misordered '(package (name action-misordered) (depends mid))'
+cat > "${ws}/action-misordered/.github/workflows/ci.yml" <<'YAML'
+steps:
+  - uses: winterchill-trading/infra/.github/actions/ox-setup@main
+    with:
+      pins: |
+        mid https://github.com/winterchill-trading/mid.git
+        base-lib https://github.com/winterchill-trading/base.git
+YAML
 
 fail=0
 expect() {
@@ -52,4 +75,6 @@ expect wrongurl 1 "pin base-lib points at https://github.com/winterchill-trading
 expect two 0 "two: ok (1 sibling pins)"
 expect missing 1 "opam pin add -y -n base-lib https://github.com/winterchill-trading/base.git
       - run: opam pin add -y -n mid"
+expect action 0 "action: ok (3 sibling pins)"
+expect action-misordered 1 "pin mid comes before its dependency base-lib"
 exit "${fail}"
