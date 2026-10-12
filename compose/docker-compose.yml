@@ -5,9 +5,12 @@
 #   make logs
 #   make down
 #
-# Images are built from images/service with the base image
-# ghcr.io/winterchill-trading/oxcaml-base:latest (pull it, or build it with
-# `make base`).
+# `make build` (and so `make up`) builds the images with images/service/build.sh,
+# which pins siblings at resolved commits and labels each image with them;
+# `make ps` shows those labels. The `build:` sections below are the fallback
+# for plain `docker compose up --build` (siblings at their default branch, no
+# commit labels). Either way the base image is
+# ghcr.io/winterchill-trading/oxcaml-base:latest (pull it, or `make base`).
 name: winterchill
 
 x-service-build: &service-build

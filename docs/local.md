@@ -62,6 +62,16 @@ SRC=../hl-sim images/service/build.sh hl-sim hl-sim   # from a local checkout
 images/service/build.sh market-recorder market-recorder --build-arg RUNTIME_PACKAGES=rclone
 ```
 
+`build.sh` first resolves the repo's commit (`REF`, default `main`, or the
+`SRC` checkout's `HEAD`, suffixed `-dirty` when it has changes) and every
+sibling pin in the repo's `ci.yml` to its current commit, then pins the
+siblings at exactly those commits. The commits end up as labels:
+
+```sh
+docker image inspect ghcr.io/winterchill-trading/hl-sim:local --format \
+  '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "io.github.winterchill-trading.pins"}}'
+```
+
 Each image is tagged `ghcr.io/winterchill-trading/<repo>:local`, runs as uid
 10001, and has the binary as its entrypoint, so arguments go straight to it:
 
@@ -74,7 +84,7 @@ curl -s localhost:3000/info -d '{"type":"meta"}'
 
 ```sh
 make up     # simulators on 3000/3300/3400, a market maker per venue, MinIO
-make ps
+make ps     # compose ps, then each service's commit and sibling pins
 make logs
 make down   # also drops the MinIO volume
 ```

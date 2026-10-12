@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 COMPOSE := docker compose -f compose/docker-compose.yml
 BASE_IMAGE ?= ghcr.io/winterchill-trading/oxcaml-base:latest
 
@@ -6,11 +7,19 @@ BASE_IMAGE ?= ghcr.io/winterchill-trading/oxcaml-base:latest
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
 
-build: ## build every service image in the compose stack
-	BASE_IMAGE=$(BASE_IMAGE) $(COMPOSE) build
+# repo:binary[:runtime packages] for every image the compose stack runs.
+SERVICES := hl-sim:hl-sim binance-sim:binance-sim bybit-sim:bybit-sim \
+	market-maker:market-maker market-recorder:market-recorder:rclone
 
-up: ## start the local stack
-	BASE_IMAGE=$(BASE_IMAGE) $(COMPOSE) up -d --build
+build: ## build every service image in the compose stack, labelled with its commits
+	@set -e; for s in $(SERVICES); do \
+	  IFS=: read -r repo bin pkgs <<< "$$s"; \
+	  BASE_IMAGE=$(BASE_IMAGE) images/service/build.sh "$$repo" "$$bin" \
+	    $${pkgs:+--build-arg RUNTIME_PACKAGES=$$pkgs}; \
+	done
+
+up: build ## build the images and start the local stack
+	$(COMPOSE) up -d
 
 down: ## stop the stack and drop its volumes
 	$(COMPOSE) down -v --remove-orphans
@@ -18,8 +27,8 @@ down: ## stop the stack and drop its volumes
 logs:
 	$(COMPOSE) logs -f --tail=100
 
-ps:
-	$(COMPOSE) ps
+ps: ## compose ps plus each image's commit and sibling pins
+	scripts/ps.sh
 
 lint:
 	hadolint images/oxcaml-base/Dockerfile images/service/Dockerfile
