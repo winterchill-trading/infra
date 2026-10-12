@@ -78,9 +78,19 @@ RUN apt-get update \
  && { userdel -r ubuntu 2>/dev/null || true; } \
  && useradd -r -u 10001 -m -d /var/lib/service service \
  && install -d -o 10001 -g 10001 "/var/lib/${REPO}"
+# DuckDB CLI for binaries that shell out to it (`market-data check` and
+# `query`); empty skips it. The release ships one gzipped binary per arch.
+ARG DUCKDB_VERSION=""
+ARG TARGETARCH
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN if [ -n "${DUCKDB_VERSION}" ]; then \
+      curl -fsSL "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-${TARGETARCH}.gz" \
+        | gunzip > /usr/local/bin/duckdb \
+      && chmod 755 /usr/local/bin/duckdb \
+      && /usr/local/bin/duckdb --version; \
+    fi
 COPY --from=build /home/opam/out/service /usr/local/bin/service
 COPY --from=build /home/opam/revision /etc/service-revision
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN ln -s /usr/local/bin/service "/usr/local/bin/${BIN}" \
  && ! ldd /usr/local/bin/service | grep 'not found'
 LABEL org.opencontainers.image.source="https://github.com/winterchill-trading/infra" \
