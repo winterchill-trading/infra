@@ -1,0 +1,20 @@
+{{- range .Values.recorder.venues }}
+---
+# Local buffer: files sit here until the upload command has copied them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $.Release.Name }}-recorder-{{ .name }}
+  labels:
+    {{- include "winterchill.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: market-recorder
+    winterchill/venue: {{ .name }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $.Values.recorder.persistence.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $.Values.recorder.persistence.size }}
+{{- end }}
