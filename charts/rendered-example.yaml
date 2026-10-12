@@ -819,7 +819,10 @@ spec:
 ---
 # Source: winterchill/templates/day-close-cronjob.yaml
 # Converts yesterday's norm/ event logs on this venue's buffer volume into
-# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+# parquet/ tables (`market-data day-close`, idempotent), then runs the
+# data-quality assertions over them (`market-data check`) and uploads them.
+# A failed check fails the Job: its log prints a FAIL line per check, and
+# kube-state-metrics exposes it as kube_job_status_failed.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -878,6 +881,27 @@ spec:
                 - name: data
                   mountPath: /var/lib/market-recorder
           containers:
+            # Runs beside the upload: a quality failure is reported, but the
+            # day's tables are still shipped.
+            - name: check
+              image: ghcr.io/winterchill-trading/market-data:local
+              imagePullPolicy: IfNotPresent
+              args:
+                - check
+                - -dir
+                - "/var/lib/market-recorder"
+                - -max-gap
+                - "1m"
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+                  readOnly: true
             - name: upload
               image: rclone/rclone:1.71.1
               args:
@@ -923,7 +947,10 @@ spec:
 ---
 # Source: winterchill/templates/day-close-cronjob.yaml
 # Converts yesterday's norm/ event logs on this venue's buffer volume into
-# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+# parquet/ tables (`market-data day-close`, idempotent), then runs the
+# data-quality assertions over them (`market-data check`) and uploads them.
+# A failed check fails the Job: its log prints a FAIL line per check, and
+# kube-state-metrics exposes it as kube_job_status_failed.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -982,6 +1009,27 @@ spec:
                 - name: data
                   mountPath: /var/lib/market-recorder
           containers:
+            # Runs beside the upload: a quality failure is reported, but the
+            # day's tables are still shipped.
+            - name: check
+              image: ghcr.io/winterchill-trading/market-data:local
+              imagePullPolicy: IfNotPresent
+              args:
+                - check
+                - -dir
+                - "/var/lib/market-recorder"
+                - -max-gap
+                - "1m"
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+                  readOnly: true
             - name: upload
               image: rclone/rclone:1.71.1
               args:
@@ -1027,7 +1075,10 @@ spec:
 ---
 # Source: winterchill/templates/day-close-cronjob.yaml
 # Converts yesterday's norm/ event logs on this venue's buffer volume into
-# parquet/ tables (`market-data day-close`, idempotent), then uploads them.
+# parquet/ tables (`market-data day-close`, idempotent), then runs the
+# data-quality assertions over them (`market-data check`) and uploads them.
+# A failed check fails the Job: its log prints a FAIL line per check, and
+# kube-state-metrics exposes it as kube_job_status_failed.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -1086,6 +1137,27 @@ spec:
                 - name: data
                   mountPath: /var/lib/market-recorder
           containers:
+            # Runs beside the upload: a quality failure is reported, but the
+            # day's tables are still shipped.
+            - name: check
+              image: ghcr.io/winterchill-trading/market-data:local
+              imagePullPolicy: IfNotPresent
+              args:
+                - check
+                - -dir
+                - "/var/lib/market-recorder"
+                - -max-gap
+                - "1m"
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/market-recorder
+                  readOnly: true
             - name: upload
               image: rclone/rclone:1.71.1
               args:
