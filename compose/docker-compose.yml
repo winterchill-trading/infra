@@ -205,6 +205,14 @@ services:
     restart: unless-stopped
     environment:
       HL_COPY_MASTER_KEY: ${HL_COPY_MASTER_KEY:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
+      # Its database on the postgres service. The API does not read these yet
+      # (it keeps state in copy-data); they are here for when it does.
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: hl_copy
+      PGPASSWORD: ${HL_COPY_DB_PASSWORD:-hl-copy-dev}
+      PGDATABASE: hl_copy
+      DATABASE_URL: postgres://hl_copy:${HL_COPY_DB_PASSWORD:-hl-copy-dev}@postgres:5432/hl_copy
     command:
       - -port
       - "8080"
@@ -231,6 +239,7 @@ services:
       interval: 5s
       retries: 20
     depends_on:
+      postgres: { condition: service_healthy }
       hl-sim: { condition: service_healthy }
       hl-leaderboard: { condition: service_started }
 
