@@ -155,6 +155,77 @@ services:
     depends_on:
       hl-leaderboard-collect: { condition: service_started }
 
+  # Hyperliquid testnet in a box, under the `testnet` profile (`make
+  # up-testnet`, docs/testnet-box.md): an hl-sim whose books follow
+  # Hyperliquid mainnet's public feed (read-only, no keys), leader accounts,
+  # hl-mm quoting each anchored coin and a recorder recording the result.
+  testnet-sim:
+    image: ghcr.io/winterchill-trading/hl-sim:local
+    profiles: [testnet]
+    restart: unless-stopped
+    command:
+      - -port
+      - "3000"
+      - -seed
+      - "42"
+      - -anchor
+      - hyperliquid:BTC
+      - -anchor
+      - hyperliquid:ETH
+      - -anchor
+      - hyperliquid:SOL
+      - -leaders
+      - "${TESTNET_LEADERS:-5}"
+    ports: ["${TESTNET_SIM_PORT:-3600}:3000"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-d", '{"type":"meta"}', "http://localhost:3000/info"]
+      interval: 5s
+      retries: 20
+
+  testnet-mm-btc:
+    image: ghcr.io/winterchill-trading/hl-mm:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: hl-mm
+        BIN: hl-mm
+    profiles: [testnet]
+    restart: unless-stopped
+    # Unsigned requests acting as -address (hl-sim's X-Address); one account
+    # per coin so the two inventories stay apart.
+    command: ["-base-url", "http://testnet-sim:3000", "-coin", "BTC",
+              "-address", "0x00000000000000000000000000000000000000b1"]
+    depends_on:
+      testnet-sim: { condition: service_healthy }
+
+  testnet-mm-eth:
+    image: ghcr.io/winterchill-trading/hl-mm:local
+    profiles: [testnet]
+    restart: unless-stopped
+    command: ["-base-url", "http://testnet-sim:3000", "-coin", "ETH",
+              "-address", "0x00000000000000000000000000000000000000b2"]
+    depends_on:
+      testnet-sim: { condition: service_healthy }
+      testnet-mm-btc: { condition: service_started }
+
+  testnet-recorder:
+    image: ghcr.io/winterchill-trading/market-recorder:local
+    profiles: [testnet]
+    restart: unless-stopped
+    command: ["run", "-config", "/etc/market-recorder/recorder.sexp"]
+    volumes:
+      - ./recorder-testnet.sexp:/etc/market-recorder/recorder.sexp:ro
+      - testnet-recorder-data:/var/lib/market-recorder
+    ports: ["${TESTNET_RECORDER_PORT:-9110}:9100"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9100/healthz"]
+      interval: 10s
+      start_period: 30s
+      retries: 6
+    depends_on:
+      testnet-sim: { condition: service_healthy }
+
   minio:
     # Upstream stopped publishing MinIO images; pgsty/minio is a maintained build.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
@@ -319,3 +390,4 @@ volumes:
   minio-data:
   recorder-data:
   leaderboard-data:
+  testnet-recorder-data:
