@@ -36,7 +36,7 @@ jobs:
           REPOS: ${{ inputs.repos }}
           O3: ${{ inputs.o3 }}
         run: |
-          all='hl-sim binance-sim bybit-sim market-maker market-recorder market-data market-replay'
+          all='hl-sim binance-sim bybit-sim market-maker market-recorder market-data market-replay hl-mm hl-leaderboard hl-copy-engine hl-copy-api hl-copy-web'
           # Built twice, default flags and O3=true.
           hot=' market-recorder market-maker hl-sim binance-sim bybit-sim market-replay '
           revs='{}' list='[]'
@@ -85,7 +85,10 @@ jobs:
           [[ ${REPO} == market-recorder ]] && extra+=(--build-arg RUNTIME_PACKAGES=rclone)
           # `market-data check` runs in the day-close job and shells out to duckdb.
           [[ ${REPO} == market-data ]] && extra+=(--build-arg DUCKDB_VERSION=1.5.6)
-          images/service/build.sh "${REPO}" "${REPO}" "${extra[@]}" \
+          # The web app is a static site, not a binary (the Dockerfile's web target).
+          bin=${REPO}
+          [[ ${REPO} == hl-copy-web ]] && bin='' && extra+=(--target web)
+          images/service/build.sh "${REPO}" "${bin}" "${extra[@]}" \
             --output "type=image,push-by-digest=true,name-canonical=true,push=true" \
             --metadata-file /tmp/meta.json
           mkdir -p /tmp/digests
