@@ -3,6 +3,8 @@
 #
 #   images/service/build.sh REPO BIN [extra buildx args...]
 #
+# BIN may be empty for a library repo built with `--target bench-out`.
+#
 # The repo commit and every sibling pin from the repo's CI are resolved to
 # commits first; the build pins siblings at exactly those commits and records
 # them as image labels:
@@ -55,14 +57,21 @@ else
     "https://raw.githubusercontent.com/${org}/${repo}/${revision}/.github/workflows/ci.yml"
 fi
 
-# Same pin lines the Dockerfile falls back to: `opam pin add <pkg> <url>`.
+# Same pin lines the Dockerfile falls back to: `opam pin add <pkg> <url>` and
+# the ox-setup `pins: |` block, first occurrence of each package.
 pins=() labels=()
 while read -r pkg url; do
-  sha=$(remote_head "${url}" HEAD)
-  [[ -n ${sha} ]] || { echo "cannot resolve HEAD of ${url}" >&2; exit 1; }
+  ref=HEAD
+  [[ ${url} == *#* ]] && ref=${url#*#}
+  url=${url%%#*}
+  sha=$(remote_head "${url}" "${ref}")
+  [[ -n ${sha} ]] || { echo "cannot resolve ${ref} of ${url}" >&2; exit 1; }
   pins+=("${pkg}=${url}#${sha}")
   labels+=("${pkg}=${sha:0:12}")
-done < <(grep -hoE 'opam pin add .*' "${work}/ci.yml" | grep -oE '[a-z0-9_-]+ https://[^ ]+' || true)
+done < <({ grep -hoE 'opam pin add .*' "${work}/ci.yml" | grep -oE '[a-z0-9_-]+ https://[^ ]+'
+           sed -n '/pins: |/,/^ *[^ ]*:/p' "${work}/ci.yml" \
+             | grep -oE '^ *[a-z0-9_-]+ https://[^ $]+' | sed 's/^ *//'; } \
+         | awk '!seen[$1]++' || true)
 
 args=(
   --build-arg "REPO=${repo}"
