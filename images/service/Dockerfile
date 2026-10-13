@@ -13,6 +13,7 @@
 
 ARG BASE_IMAGE=ghcr.io/winterchill-trading/oxcaml-base:latest
 ARG RUNTIME_IMAGE=ubuntu:24.04
+ARG WEB_IMAGE=nginxinc/nginx-unprivileged:1.29-alpine
 
 # Source tree. BuildKit re-checks the remote ref on every build, so a moved
 # branch is picked up; `--build-context src=<dir>` replaces this stage.
@@ -95,6 +96,22 @@ RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 
 
 FROM scratch AS bench-out
 COPY --from=bench /home/opam/bench.txt /
+
+# Static site of a js_of_ocaml app (hl-copy-web): what the repo installs
+# under share/<REPO>, served by an unprivileged nginx on port 8080. BIN is
+# empty:
+#
+#   build.sh hl-copy-web "" --target web
+#
+# The site's nginx config (proxying the API) is mounted by compose and the
+# chart, so the image holds only the files.
+# hadolint ignore=DL3006
+FROM ${WEB_IMAGE} AS web
+ARG REPO
+COPY --from=build /home/opam/src/_build/install/default/share/${REPO}/ /usr/share/nginx/html/
+COPY --from=build /home/opam/revision /etc/service-revision
+LABEL org.opencontainers.image.source="https://github.com/winterchill-trading/infra" \
+      org.opencontainers.image.title="${REPO}"
 
 # hadolint ignore=DL3006
 FROM ${RUNTIME_IMAGE} AS runtime
