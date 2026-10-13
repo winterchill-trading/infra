@@ -16,6 +16,25 @@ type: Opaque
 stringData:
   HL_COPY_MASTER_KEY: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 ---
+# Source: winterchill/templates/postgres.yaml
+# Superuser and per-database passwords. Set postgres.auth.existingSecret (same
+# three keys) for anything but development.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: winterchill-postgres
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: postgres
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "postgres"
+  NEOBANK_DB_PASSWORD: "neobank-dev"
+  HL_COPY_DB_PASSWORD: "hl-copy-dev"
+---
 # Source: winterchill/templates/s3-secret.yaml
 apiVersion: v1
 kind: Secret
@@ -72,6 +91,46 @@ data:
             proxy_read_timeout 1h;
         }
     }
+---
+# Source: winterchill/templates/postgres.yaml
+# The compose init script (compose/postgres/initdb.d), copied into the chart
+# because Helm only reads files under it; `make lint` checks the two match.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: winterchill-postgres-initdb
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: postgres
+data:
+  10-databases.sh: |
+    #!/usr/bin/env bash
+    # Creates one login role and one database per application. The postgres image
+    # runs this once, on an empty data directory; later starts skip it, so a
+    # changed password here does not reach an existing cluster (ALTER ROLE it, or
+    # `make reset-data CONFIRM=yes` locally).
+    #
+    # Passwords come from the environment. Compose and the chart's dev profile set
+    # development defaults; anything else sets its own.
+    set -euo pipefail
+    
+    create_database() {
+      local name=$1 password=$2
+      # psql's :"name" and :'password' quote the identifier and the literal.
+      psql -v ON_ERROR_STOP=1 --no-psqlrc --username "$POSTGRES_USER" --dbname postgres \
+        -v name="$name" -v password="$password" <<'SQL'
+    CREATE ROLE :"name" LOGIN PASSWORD :'password';
+    CREATE DATABASE :"name" OWNER :"name";
+    REVOKE ALL ON DATABASE :"name" FROM PUBLIC;
+    SQL
+      echo "initdb: database $name, owner $name"
+    }
+    
+    create_database neobank "${NEOBANK_DB_PASSWORD:?NEOBANK_DB_PASSWORD is not set}"
+    create_database hl_copy "${HL_COPY_DB_PASSWORD:?HL_COPY_DB_PASSWORD is not set}"
 ---
 # Source: winterchill/templates/recorder-configmap.yaml
 apiVersion: v1
@@ -331,6 +390,26 @@ spec:
       port: 9101
       targetPort: metrics
 
+---
+# Source: winterchill/templates/postgres.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-postgres
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: postgres
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
 ---
 # Source: winterchill/templates/recorder-service.yaml
 apiVersion: v1
@@ -1262,6 +1341,100 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { memory: 256Mi }
+---
+# Source: winterchill/templates/postgres.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: winterchill-postgres
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: postgres
+spec:
+  replicas: 1
+  serviceName: winterchill-postgres
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: postgres
+      annotations:
+        # A changed init script only matters on an empty volume, but rolling
+        # the pod keeps the mounted copy in step with the chart.
+        checksum/initdb: 813536b44a59798d9d5f3067d53c03952e4f7478d44ce4eb3f89b599a72d12af
+    spec:
+      # uid 70 is the postgres user of the alpine image.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+      containers:
+        - name: postgres
+          image: "postgres:18-alpine"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+          envFrom:
+            - secretRef:
+                name: winterchill-postgres
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, postgres]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, postgres]
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            # Postgres 18 keeps PGDATA in /var/lib/postgresql/18/docker; the
+            # claim is the parent, as in compose.
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      # Postgres checkpoints on SIGTERM (smart shutdown) before exiting.
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: initdb
+          configMap:
+            name: winterchill-postgres-initdb
+            defaultMode: 0755
+  # The claim outlives the StatefulSet: `helm uninstall` keeps it.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/instance: winterchill
+          app.kubernetes.io/name: postgres
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+
 ---
 # Source: winterchill/templates/day-close-cronjob.yaml
 # Converts yesterday's norm/ event logs on this venue's buffer volume into
