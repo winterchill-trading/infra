@@ -48,7 +48,7 @@ Run of 2026-10-13, every sibling at its default branch.
 | binance-client | trades | 690 | 729 | 1.06 | 24 / 22 |
 | binance-client | bbo | 627 | 655 | 1.04 | 21 / 19 |
 | binance-client | depth (scan) | 15,791 | 17,256 | 1.09 | 3 / 3 |
-| market-recorder | normalize (frames/s) | 1.85 M | 1.96 M | 0.95 | |
+| market-recorder | normalize (frames/s) | 1.85 M | 1.96 M | 0.94 | |
 | market-recorder | raw write + zstd (frames/s) | 574 k | 580 k | 0.99 | |
 | market-recorder | event log write (frames/s) | 3.90 M | 4.17 M | 0.94 | |
 | market-recorder | merge files (frames/s) | 441 k | 454 k | 0.97 | |
