@@ -90,6 +90,26 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ $secret }}
+          {{- if .Values.postgres.enabled }}
+          # The hl_copy database. The API does not read these yet (its state is
+          # on the volume); they are here for when it does.
+          env:
+            - name: PGHOST
+              value: {{ .Release.Name }}-postgres
+            - name: PGPORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: PGUSER
+              value: hl_copy
+            - name: PGDATABASE
+              value: hl_copy
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.auth.existingSecret | default (printf "%s-postgres" .Release.Name) }}
+                  key: HL_COPY_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://hl_copy:$(PGPASSWORD)@{{ .Release.Name }}-postgres:{{ .Values.postgres.port }}/hl_copy"
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.copy.api.port }}

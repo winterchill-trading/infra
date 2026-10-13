@@ -767,6 +767,24 @@ spec:
           envFrom:
             - secretRef:
                 name: winterchill-hl-copy
+          # The hl_copy database. The API does not read these yet (its state is
+          # on the volume); they are here for when it does.
+          env:
+            - name: PGHOST
+              value: winterchill-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: hl_copy
+            - name: PGDATABASE
+              value: hl_copy
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: winterchill-postgres
+                  key: HL_COPY_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://hl_copy:$(PGPASSWORD)@winterchill-postgres:5432/hl_copy"
           ports:
             - name: http
               containerPort: 8080
