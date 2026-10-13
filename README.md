@@ -23,6 +23,8 @@ siblings at resolved commits, labels the image with them
 (`org.opencontainers.image.revision`, `io.github.winterchill-trading.pins`) and tags it
 `:<commit12>`. The `service-images` workflow (manual) pushes multi-arch images with
 those tags to GHCR; the chart's defaults reference them, never `latest`.
+The hot binaries are also built with flambda2 `-O3`; [docs/images.md](docs/images.md)
+has the bench comparison, image sizes, build times and which build owns the commit tag.
 
 ## Quick start
 
