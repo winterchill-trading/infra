@@ -42,6 +42,21 @@ development key, which is fine for the simulator and nothing else; set your own 
 `HL_COPY_MASTER_KEY=$(openssl rand -hex 32) make up-copy`. Changing it makes the stored
 agent keys unreadable, so users approve a new agent.
 
+## Smoke test without a browser
+
+`hl-copy-api/scripts/curl-flow.sh` walks the same flow with a fixed throwaway key signed
+by `eth-account` (`PYTHON="uv run -q --with eth-account python3"` works without a venv):
+
+```sh
+PYTHON=... API=http://localhost:8080 LEADER=<address from /leaders> \
+  hl-copy-api/scripts/curl-flow.sh
+curl -s localhost:9930/status      # the follower, its positions, fills and lag
+```
+
+The follow it creates allows BTC only; the simulator's leaders mostly trade ETH, so
+PATCH the follow's caps (or pick a BTC leader) before expecting fills. A second run
+against the same wallet fails on `POST /follows` with a conflict: the follow exists.
+
 ## Logging in with a browser wallet
 
 Any EIP-1193 wallet (MetaMask, Rabby, ...) works. Use a fresh throwaway account: the
