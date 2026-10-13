@@ -5,6 +5,9 @@ global:
 scrape_configs:
   - job_name: market-recorder
     static_configs: [{ targets: ["127.0.0.1:9100"] }]
+  # The `testnet` profile's recorder (down unless `make up-testnet`).
+  - job_name: testnet-recorder
+    static_configs: [{ targets: ["127.0.0.1:9110"] }]
   - job_name: cadvisor
     static_configs: [{ targets: ["127.0.0.1:8088"] }]
     metric_relabel_configs:
