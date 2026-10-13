@@ -1,13 +1,19 @@
 name: service-images
 # Builds the service images from each repo's current main and pushes them to
 # GHCR tagged with the repo commit (first 12 characters), multi-arch. The
-# Helm defaults reference these tags; bump them after a run.
+# Helm defaults reference these tags; bump them after a run. The hot
+# binaries are also built with `O3=true` and tagged `<commit12>-o3`
+# (docs/images.md).
 on:
   workflow_dispatch:
     inputs:
       repos:
         description: "Space-separated repos to build (empty: all)"
         default: ""
+      o3:
+        description: "Also build the -o3 variant of the hot binaries"
+        type: boolean
+        default: true
 concurrency:
   group: service-images
   cancel-in-progress: false
@@ -28,14 +34,20 @@ jobs:
       - id: revs
         env:
           REPOS: ${{ inputs.repos }}
+          O3: ${{ inputs.o3 }}
         run: |
-          all='hl-sim binance-sim bybit-sim market-maker market-recorder market-data'
+          all='hl-sim binance-sim bybit-sim market-maker market-recorder market-data market-replay'
+          # Built twice, default flags and O3=true.
+          hot=' market-recorder market-maker hl-sim binance-sim bybit-sim market-replay '
           revs='{}' list='[]'
           for repo in ${REPOS:-$all}; do
             sha=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY_OWNER}/${repo}.git" HEAD | cut -f1)
             test -n "${sha}"
             revs=$(jq -c --arg r "${repo}" --arg s "${sha}" '. + {($r): $s}' <<< "${revs}")
-            list=$(jq -c --arg r "${repo}" '. + [$r]' <<< "${list}")
+            list=$(jq -c --arg r "${repo}" '. + [{repo: $r, variant: "default", o3: false, suffix: ""}]' <<< "${list}")
+            if [[ ${O3} != false && ${hot} == *" ${repo} "* ]]; then
+              list=$(jq -c --arg r "${repo}" '. + [{repo: $r, variant: "o3", o3: true, suffix: "-o3"}]' <<< "${list}")
+            fi
           done
           echo "revs=${revs}" >> "$GITHUB_OUTPUT"
           echo "matrix=${list}" >> "$GITHUB_OUTPUT"
@@ -46,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        repo: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+        target: ${{ fromJSON(needs.resolve.outputs.matrix) }}
         arch: [amd64, arm64]
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 90
@@ -63,12 +75,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push by digest
         env:
-          REPO: ${{ matrix.repo }}
-          REF: ${{ fromJSON(needs.resolve.outputs.revs)[matrix.repo] }}
+          REPO: ${{ matrix.target.repo }}
+          REF: ${{ fromJSON(needs.resolve.outputs.revs)[matrix.target.repo] }}
           PLATFORM: linux/${{ matrix.arch }}
-          TAG: ${{ env.REGISTRY }}/${{ matrix.repo }}
+          TAG: ${{ env.REGISTRY }}/${{ matrix.target.repo }}
+          O3: ${{ matrix.target.o3 }}
         run: |
-          extra=()
+          extra=(--build-arg "O3=${O3}")
           [[ ${REPO} == market-recorder ]] && extra+=(--build-arg RUNTIME_PACKAGES=rclone)
           # `market-data check` runs in the day-close job and shells out to duckdb.
           [[ ${REPO} == market-data ]] && extra+=(--build-arg DUCKDB_VERSION=1.5.6)
@@ -78,9 +91,22 @@ jobs:
           mkdir -p /tmp/digests
           digest=$(jq -r '."containerimage.digest"' /tmp/meta.json)
           touch "/tmp/digests/${digest#sha256:}"
+          # Build time and compressed size (sum of the layers) for docs/images.md.
+          secs=${SECONDS}
+          size=$(
+            manifest=$(docker buildx imagetools inspect --raw "${TAG}@${digest}")
+            if jq -e '.manifests' <<< "${manifest}" > /dev/null; then
+              platform=$(jq -r --arg a "${{ matrix.arch }}" \
+                '[.manifests[] | select(.platform.architecture == $a)][0].digest' <<< "${manifest}")
+              manifest=$(docker buildx imagetools inspect --raw "${TAG}@${platform}")
+            fi
+            jq '[.layers[].size] | add / 1048576 | floor' <<< "${manifest}"
+          ) || size='?'
+          echo "${REPO} ${{ matrix.target.variant }} ${{ matrix.arch }}: built in $((secs / 60))m$((secs % 60))s, ${size} MiB compressed" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.repo }}-${{ matrix.arch }}
+          name: digest-${{ matrix.target.repo }}-${{ matrix.target.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           retention-days: 1
 
@@ -89,13 +115,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        repo: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+        target: ${{ fromJSON(needs.resolve.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: digest-${{ matrix.repo }}-*
+          pattern: digest-${{ matrix.target.repo }}-${{ matrix.target.variant }}-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -106,10 +132,11 @@ jobs:
       - name: Tag the commit
         working-directory: /tmp/digests
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ matrix.repo }}
-          SHA: ${{ fromJSON(needs.resolve.outputs.revs)[matrix.repo] }}
+          IMAGE: ${{ env.REGISTRY }}/${{ matrix.target.repo }}
+          SHA: ${{ fromJSON(needs.resolve.outputs.revs)[matrix.target.repo] }}
+          SUFFIX: ${{ matrix.target.suffix }}
         run: |
           refs=()
           for d in *; do refs+=("${IMAGE}@sha256:${d}"); done
-          docker buildx imagetools create -t "${IMAGE}:${SHA:0:12}" "${refs[@]}"
-          docker buildx imagetools inspect "${IMAGE}:${SHA:0:12}"
+          docker buildx imagetools create -t "${IMAGE}:${SHA:0:12}${SUFFIX}" "${refs[@]}"
+          docker buildx imagetools inspect "${IMAGE}:${SHA:0:12}${SUFFIX}"
