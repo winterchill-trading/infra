@@ -24,8 +24,10 @@ jobs:
             https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
           chmod +x /usr/local/bin/hadolint
           hadolint images/oxcaml-base/Dockerfile images/service/Dockerfile
-      - run: shellcheck -x images/service/build.sh scripts/*.sh test-actions/*.sh .github/actions/ox-setup/*.sh
+      - run: shellcheck -x images/service/build.sh scripts/*.sh test-actions/*.sh compose/postgres/initdb.d/*.sh .github/actions/ox-setup/*.sh
       - run: scripts/test-check-pins.sh
+      - name: chart init script matches compose
+        run: diff -u compose/postgres/initdb.d/10-databases.sh charts/winterchill/files/postgres/10-databases.sh
   helm:
     runs-on: ubuntu-latest
     steps:

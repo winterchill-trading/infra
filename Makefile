@@ -116,8 +116,11 @@ ps: ## compose ps plus each image's commit and sibling pins
 
 lint:
 	hadolint images/oxcaml-base/Dockerfile images/service/Dockerfile
-	shellcheck -x images/service/build.sh scripts/*.sh test-actions/*.sh
+	shellcheck -x images/service/build.sh scripts/*.sh test-actions/*.sh compose/postgres/initdb.d/*.sh
 	scripts/test-check-pins.sh
+	# The chart carries a copy of the compose init script (Helm reads only
+	# files inside the chart); the two must not drift.
+	diff -u compose/postgres/initdb.d/10-databases.sh charts/winterchill/files/postgres/10-databases.sh
 	helm lint charts/winterchill
 	helm lint charts/winterchill -f charts/winterchill/values-dev.yaml
 
