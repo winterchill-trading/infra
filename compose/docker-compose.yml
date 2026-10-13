@@ -102,6 +102,59 @@ services:
       bybit-sim: { condition: service_healthy }
       mm-hyperliquid: { condition: service_started }
 
+  # Copy trading, under the `copy` profile (`make up-copy`, docs/copytrading.md).
+  #
+  # hl-leaderboard-collect: every LEADERBOARD_INTERVAL seconds collects the
+  # simulator's leaderboard, the top accounts' fills and state, and ranks them
+  # into leaders.json; hl-leaderboard serves that file (re-read on change).
+  hl-leaderboard-collect:
+    image: ghcr.io/winterchill-trading/hl-leaderboard:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: hl-leaderboard
+        BIN: hl-leaderboard
+    profiles: [copy]
+    restart: unless-stopped
+    entrypoint: ["/usr/bin/tini", "--", "/bin/bash", "-c"]
+    environment:
+      LEADERBOARD_INTERVAL: ${LEADERBOARD_INTERVAL:-60}
+    # The sim's leaders start with 100000 USD and trade for minutes, not
+    # weeks: no account-value floor, a one-day lookback, one round trip.
+    command:
+      - |
+        dir=/var/lib/hl-leaderboard
+        while true; do
+          if hl-leaderboard collect -out "$$dir" -network local -base-url http://hl-sim:3000 \
+               -min-account-value 0 -lookback-days 1 \
+             && hl-leaderboard rank -in "$$dir" -out "$$dir/leaders.json" -min-trades 1; then
+            echo "leaderboard ranked"
+          else
+            echo "leaderboard collect FAILED" >&2
+          fi
+          sleep "$$LEADERBOARD_INTERVAL"
+        done
+    volumes:
+      - leaderboard-data:/var/lib/hl-leaderboard
+    depends_on:
+      hl-sim: { condition: service_healthy }
+
+  hl-leaderboard:
+    image: ghcr.io/winterchill-trading/hl-leaderboard:local
+    profiles: [copy]
+    restart: unless-stopped
+    command: ["serve", "-port", "8090", "-dir", "/var/lib/hl-leaderboard"]
+    volumes:
+      - leaderboard-data:/var/lib/hl-leaderboard
+    ports: ["${LEADERBOARD_PORT:-8090}:8090"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8090/health"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      hl-leaderboard-collect: { condition: service_started }
+
   minio:
     # Upstream stopped publishing MinIO images; pgsty/minio is a maintained build.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
@@ -265,3 +318,4 @@ services:
 volumes:
   minio-data:
   recorder-data:
+  leaderboard-data:
