@@ -100,6 +100,10 @@ sims:
     - name: hl-sim
       tag: 300e00d37d9d
       port: 3000
+      # Leader accounts for the copy-trading services (copy.enabled). The flag
+      # needs an hl-sim image from 8cbc145 or later; bump the tag before
+      # enabling sims with the default tags.
+      extraArgs: ["-leaders", "5"]
       probe: { path: /info, body: '{"type":"meta"}' }
     - name: binance-sim
       tag: 05db961cd03a

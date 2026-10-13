@@ -27,7 +27,14 @@ spec:
         - name: sim
           image: {{ include "winterchill.image" (dict "root" $ "image" (dict "repository" .name "tag" ($.Values.sims.image.tag | default .tag))) }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
-          args: ["-port", {{ .port | quote }}, "-seed", {{ $.Values.sims.seed | quote }}]
+          args:
+            - -port
+            - {{ .port | quote }}
+            - -seed
+            - {{ $.Values.sims.seed | quote }}
+            {{- range .extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .port }}
