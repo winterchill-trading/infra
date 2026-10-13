@@ -8,6 +8,11 @@ scrape_configs:
   # The `testnet` profile's recorder (down unless `make up-testnet`).
   - job_name: testnet-recorder
     static_configs: [{ targets: ["127.0.0.1:9110"] }]
+  # The `copy` profile (down unless `make up-copy`).
+  - job_name: hl-copy-engine
+    static_configs: [{ targets: ["127.0.0.1:9930"] }]
+  - job_name: hl-copy-api
+    static_configs: [{ targets: ["127.0.0.1:8080"] }]
   - job_name: cadvisor
     static_configs: [{ targets: ["127.0.0.1:8088"] }]
     metric_relabel_configs:
