@@ -2,7 +2,8 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f compose/docker-compose.yml
 BASE_IMAGE ?= ghcr.io/winterchill-trading/oxcaml-base:latest
 
-.PHONY: base build build-day-close up up-monitoring up-day-close up-memtrace memtrace-pull down logs ps lint chart pins
+.PHONY: base build build-day-close build-testnet up up-monitoring up-day-close \
+	up-testnet up-memtrace memtrace-pull down logs ps lint chart pins
 
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
@@ -12,12 +13,23 @@ SERVICES := hl-sim:hl-sim binance-sim:binance-sim bybit-sim:bybit-sim \
 	market-maker:market-maker market-recorder:market-recorder:rclone
 DUCKDB_VERSION ?= 1.5.6
 
-build: ## build every service image in the compose stack, labelled with its commits
-	@set -e; for s in $(SERVICES); do \
+# Images of the `testnet` profile, built only by its target.
+TESTNET_SERVICES := hl-sim:hl-sim hl-mm:hl-mm market-recorder:market-recorder:rclone
+
+# $(call build-images,repo:binary[:runtime packages] ...)
+define build-images
+	@set -e; for s in $(1); do \
 	  IFS=: read -r repo bin pkgs <<< "$$s"; \
 	  BASE_IMAGE=$(BASE_IMAGE) images/service/build.sh "$$repo" "$$bin" \
 	    $${pkgs:+--build-arg RUNTIME_PACKAGES=$$pkgs}; \
 	done
+endef
+
+build: ## build every service image in the compose stack, labelled with its commits
+	$(call build-images,$(SERVICES))
+
+build-testnet: ## build the testnet box images
+	$(call build-images,$(TESTNET_SERVICES))
 
 build-day-close: ## build the market-data image (day-close and check, with duckdb)
 	BASE_IMAGE=$(BASE_IMAGE) images/service/build.sh market-data market-data \
@@ -28,6 +40,14 @@ up: build ## build the images and start the local stack
 
 up-monitoring: up ## also start cadvisor, node-exporter and Prometheus
 	$(COMPOSE) --profile monitoring up -d
+
+# Named services only: a bare `--profile testnet up` would also start the
+# whole default stack.
+TESTNET_UP := testnet-sim testnet-mm-btc testnet-mm-eth testnet-recorder
+
+up-testnet: build-testnet ## Hyperliquid testnet in a box, with monitoring (docs/testnet-box.md)
+	$(COMPOSE) --profile testnet --profile monitoring up -d $(TESTNET_UP) \
+	  cadvisor node-exporter prometheus
 
 MEMTRACE_FILE := /var/lib/market-recorder/memtrace.ctf
 MEMTRACE_RATE ?= 1e-4
@@ -43,7 +63,8 @@ up-day-close: up build-day-close ## also run day-close and market-data check on 
 	$(COMPOSE) --profile day-close up -d
 
 down: ## stop the stack and drop its volumes
-	$(COMPOSE) --profile monitoring --profile day-close down -v --remove-orphans
+	$(COMPOSE) --profile monitoring --profile day-close --profile testnet \
+	  down -v --remove-orphans
 
 logs:
 	$(COMPOSE) logs -f --tail=100
