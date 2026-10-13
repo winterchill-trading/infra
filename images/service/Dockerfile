@@ -106,9 +106,15 @@ COPY --from=bench /home/opam/bench.txt /
 # The site's nginx config (proxying the API) is mounted by compose and the
 # chart, so the image holds only the files.
 # hadolint ignore=DL3006
+# dune installs share/ files as symlinks into _build/default, and COPY
+# --from keeps symlinks as they are, so the site is dereferenced here first
+# (a dangling index.html served as 404 on the first compose run).
+FROM build AS site
+RUN cp -rL /home/opam/src/_build/install/default/share/${REPO} /home/opam/site
+
 FROM ${WEB_IMAGE} AS web
 ARG REPO
-COPY --from=build /home/opam/src/_build/install/default/share/${REPO}/ /usr/share/nginx/html/
+COPY --from=site /home/opam/site/ /usr/share/nginx/html/
 COPY --from=build /home/opam/revision /etc/service-revision
 LABEL org.opencontainers.image.source="https://github.com/winterchill-trading/infra" \
       org.opencontainers.image.title="${REPO}"
