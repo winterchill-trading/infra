@@ -155,6 +155,107 @@ services:
     depends_on:
       hl-leaderboard-collect: { condition: service_started }
 
+  # hl-copy-api: wallet login, agent keys, follows. It writes follow configs
+  # (and sealed agent keys) to the copy-data volume, which the engine watches.
+  # HL_COPY_MASTER_KEY seals the agent keys: the default is a fixed dev key,
+  # fine for the simulator only.
+  hl-copy-api:
+    image: ghcr.io/winterchill-trading/hl-copy-api:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: hl-copy-api
+        BIN: hl-copy-api
+    profiles: [copy]
+    restart: unless-stopped
+    environment:
+      HL_COPY_MASTER_KEY: ${HL_COPY_MASTER_KEY:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
+    command:
+      - -port
+      - "8080"
+      - -exchange-url
+      - ${COPY_EXCHANGE_URL:-http://hl-sim:3000}
+      - -leaderboard-url
+      - http://hl-leaderboard:8090
+      - -engine-url
+      - http://hl-copy-engine:9930
+      - -state-dir
+      - /var/lib/hl-copy-api/state
+      - -config-dir
+      - /var/lib/hl-copy-api/configs
+      # The origin browsers sign in on: hl-copy-web, which proxies /api here.
+      - -public-url
+      - http://localhost:${COPY_WEB_PORT:-8000}
+      - -allow-origin
+      - http://localhost:${COPY_WEB_PORT:-8000}
+    volumes:
+      - copy-data:/var/lib/hl-copy-api
+    ports: ["${COPY_API_PORT:-8080}:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      hl-sim: { condition: service_healthy }
+      hl-leaderboard: { condition: service_started }
+
+  # hl-copy-engine: one follower per config file, IOC orders on hl-sim.
+  # -unsigned acts as the follower through X-Address (hl-sim without
+  # -strict-signatures). /metrics, /status and /healthz on 9930.
+  hl-copy-engine:
+    image: ghcr.io/winterchill-trading/hl-copy-engine:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: hl-copy-engine
+        BIN: hl-copy-engine
+    profiles: [copy]
+    restart: unless-stopped
+    command:
+      - run
+      - -base-url
+      - ${COPY_EXCHANGE_URL:-http://hl-sim:3000}
+      - -configs-dir
+      - /var/lib/hl-copy-api/configs
+      - -journal-dir
+      - /var/lib/hl-copy-engine/journals
+      - -port
+      - "9930"
+      - -unsigned
+    volumes:
+      # Mounted where the API image created it, read-only: the API owns it.
+      # The API starts first, so the fresh volume takes that directory's owner.
+      - copy-data:/var/lib/hl-copy-api:ro
+      - copy-journals:/var/lib/hl-copy-engine
+    ports: ["127.0.0.1:${COPY_ENGINE_PORT:-9930}:9930"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9930/healthz"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      hl-copy-api: { condition: service_healthy }
+
+  # hl-copy-web: the js_of_ocaml app (the image's web target) on nginx, with
+  # the API proxied under /api. Open http://localhost:8000/.
+  hl-copy-web:
+    image: ghcr.io/winterchill-trading/hl-copy-web:local
+    build:
+      <<: *service-build
+      target: web
+      args:
+        <<: *service-args
+        REPO: hl-copy-web
+        BIN: ""
+    profiles: [copy]
+    restart: unless-stopped
+    volumes:
+      - ./copy-web-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports: ["${COPY_WEB_PORT:-8000}:8080"]
+    depends_on:
+      hl-copy-api: { condition: service_healthy }
+
   # Hyperliquid testnet in a box, under the `testnet` profile (`make
   # up-testnet`, docs/testnet-box.md): an hl-sim whose books follow
   # Hyperliquid mainnet's public feed (read-only, no keys), leader accounts,
@@ -390,4 +491,6 @@ volumes:
   minio-data:
   recorder-data:
   leaderboard-data:
+  copy-data:
+  copy-journals:
   testnet-recorder-data:
