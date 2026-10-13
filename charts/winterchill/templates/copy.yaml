@@ -1,0 +1,271 @@
+{{- if .Values.copy.enabled }}
+{{- $tag := .Values.copy.image.tag }}
+{{- $secret := .Values.copy.masterKey.existingSecret | default (printf "%s-hl-copy" .Release.Name) }}
+{{- if not .Values.copy.masterKey.existingSecret }}
+---
+# Seals the agent keys the API stores. Set copy.masterKey.existingSecret (key
+# HL_COPY_MASTER_KEY) for anything but the simulator.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secret }}
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy
+type: Opaque
+stringData:
+  HL_COPY_MASTER_KEY: {{ required "copy.masterKey.value or copy.masterKey.existingSecret" .Values.copy.masterKey.value | quote }}
+{{- end }}
+---
+# Follow configs, sealed agent keys and follow records (API) and journals
+# (engine). Both containers run in one pod, so a ReadWriteOnce volume works.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-hl-copy
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.copy.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-hl-copy
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy
+spec:
+  replicas: 1
+  # One engine per follow directory: never two pods placing orders.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: hl-copy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: hl-copy
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: api
+          image: {{ include "winterchill.image" (dict "root" $ "image" (dict "repository" .Values.copy.api.image.repository "tag" ($tag | default .Values.copy.api.image.tag))) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - -port
+            - {{ .Values.copy.api.port | quote }}
+            - -exchange-url
+            - {{ tpl .Values.copy.baseUrl . | quote }}
+            - -leaderboard-url
+            - "http://{{ .Release.Name }}-hl-leaderboard:{{ .Values.copy.leaderboard.port }}"
+            - -engine-url
+            - "http://localhost:{{ .Values.copy.engine.port }}"
+            - -state-dir
+            - /var/lib/hl-copy/state
+            - -config-dir
+            - /var/lib/hl-copy/configs
+            - -public-url
+            - {{ .Values.copy.publicUrl | quote }}
+            - -allow-origin
+            - {{ .Values.copy.publicUrl | quote }}
+            {{- range .Values.copy.api.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ $secret }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.copy.api.port }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.copy.api.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/hl-copy
+        - name: engine
+          image: {{ include "winterchill.image" (dict "root" $ "image" (dict "repository" .Values.copy.engine.image.repository "tag" ($tag | default .Values.copy.engine.image.tag))) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - run
+            - -base-url
+            - {{ tpl .Values.copy.baseUrl . | quote }}
+            - -configs-dir
+            - /var/lib/hl-copy/configs
+            - -journal-dir
+            - /var/lib/hl-copy/journals
+            - -port
+            - {{ .Values.copy.engine.port | quote }}
+            {{- range .Values.copy.engine.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.copy.engine.port }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.copy.engine.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/hl-copy
+      # SIGTERM: the engine cancels and flushes its journals.
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-hl-copy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-hl-copy
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: hl-copy
+  ports:
+    - name: http
+      port: {{ .Values.copy.api.port }}
+      targetPort: http
+    - name: metrics
+      port: {{ .Values.copy.engine.port }}
+      targetPort: metrics
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-hl-copy-web
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy-web
+data:
+  # Same layout as compose/copy-web-nginx.conf: the app, the API under /api/.
+  default.conf: |
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        "" close;
+    }
+    server {
+        listen 8080;
+        root /usr/share/nginx/html;
+        location = / {
+            if ($args = "") {
+                return 302 /?api=/api;
+            }
+            try_files /index.html =404;
+        }
+        location /api/ {
+            proxy_pass http://{{ .Release.Name }}-hl-copy:{{ .Values.copy.api.port }}/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 1h;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-hl-copy-web
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: hl-copy-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: hl-copy-web
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+      containers:
+        - name: web
+          image: {{ include "winterchill.image" (dict "root" $ "image" (dict "repository" .Values.copy.web.image.repository "tag" ($tag | default .Values.copy.web.image.tag))) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /index.html, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-hl-copy-web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-hl-copy-web
+  labels:
+    {{- include "winterchill.labels" . | nindent 4 }}
+    app.kubernetes.io/name: hl-copy-web
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: hl-copy-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

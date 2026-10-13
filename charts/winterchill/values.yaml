@@ -148,6 +148,43 @@ copy:
       limits: { memory: 512Mi }
     persistence:
       size: 2Gi
+  # The web app's origin as browsers reach it: the sign-in message names it
+  # and the API allows it for CORS.
+  publicUrl: http://localhost:8000
+  # Key sealing the stored agent keys (64 hex digits). Prefer an existing
+  # Secret with the key HL_COPY_MASTER_KEY; `value` creates one.
+  masterKey:
+    existingSecret: ""
+    value: ""
+  # Follow configs, sealed agent keys, follow records and engine journals.
+  persistence:
+    size: 1Gi
+  api:
+    image:
+      repository: hl-copy-api
+      tag: ""
+    port: 8080
+    extraArgs: []
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { memory: 256Mi }
+  engine:
+    image:
+      repository: hl-copy-engine
+      tag: ""
+    # /metrics, /status, /healthz.
+    port: 9930
+    # How orders are signed: `-unsigned` acts through X-Address and only works
+    # on hl-sim without -strict-signatures; `-agent-key-env VAR` signs every
+    # follow with one agent key from the environment.
+    extraArgs: ["-unsigned"]
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { memory: 256Mi }
+  web:
+    image:
+      repository: hl-copy-web
+      tag: ""
 
 # Host socket and FD collector (node-exporter), one pod per node with the host
 # network and PID namespace. Off by default. Recorders only dial out, so keep
