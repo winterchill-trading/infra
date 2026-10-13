@@ -1,0 +1,86 @@
+name: o3-compare
+# Runs the hot repos' own benches inside the service image build environment,
+# default flags against O3=true (OCAMLPARAM='_,O3=1' for the pins and the
+# repo), on one amd64 runner per repo. Two interleaved rounds; the outputs
+# land in the job summary and as artifacts. Results: docs/images.md.
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: "Space-separated repos (empty: all in the matrix)"
+        default: ""
+concurrency:
+  group: o3-compare
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { repo: market-recorder, bench: "./bench/bench.exe" }
+          - { repo: order-book, bench: "./bench/main.exe -- -quota 2 -ascii" }
+          - { repo: price-anchor, bench: "./bench/bench_anchor.exe" }
+          - { repo: mm-core, bench: "./bench/main.exe -- -quota 2 -ascii" }
+          - { repo: binance-client, bench: "./bench/main.exe -- -quota 2 -ascii" }
+          - { repo: bybit-client, bench: "./bench/main.exe -- -quota 1 -ascii" }
+          - { repo: hl-client, bench: "./bench/main.exe -- -quota 2 -ascii" }
+          - { repo: okx-feed, bench: "./bench/main.exe -- -quota 2 -ascii" }
+          - { repo: parquet, bench: "./bench/bench.exe -- 1000000" }
+          - { repo: market-data, bench: "./bench/raw_reader_bench.exe" }
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - id: pick
+        env:
+          REPOS: ${{ inputs.repos }}
+          REPO: ${{ matrix.repo }}
+        run: |
+          if [[ -z ${REPOS} || " ${REPOS} " == *" ${REPO} "* ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.pick.outputs.run
+        uses: actions/checkout@v4
+      - if: steps.pick.outputs.run
+        name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+      - if: steps.pick.outputs.run
+        uses: docker/setup-buildx-action@v3
+      - if: steps.pick.outputs.run
+        name: Bench default and O3
+        env:
+          REPO: ${{ matrix.repo }}
+          BENCH: ${{ matrix.bench }}
+          PLATFORM: linux/amd64
+          TAG: o3-compare/${{ matrix.repo }}
+        run: |
+          # Resolve the commits once so both variants build the same source.
+          REF=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY_OWNER}/${REPO}.git" HEAD | cut -f1)
+          export REF
+          mkdir -p out
+          for round in 1 2; do
+            for o3 in false true; do
+              start=${SECONDS}
+              images/service/build.sh "${REPO}" "" --target bench-out \
+                --build-arg "O3=${o3}" --build-arg "BENCH=${BENCH}" \
+                --no-cache-filter bench --progress plain \
+                --output "type=local,dest=out/${o3}-${round}"
+              echo "round ${round} o3=${o3}: $((SECONDS - start))s including the build" \
+                | tee -a out/times.txt
+            done
+          done
+          {
+            echo "### ${REPO} at ${REF:0:12}"
+            echo '```'
+            cat out/times.txt
+            for f in out/*-*/bench.txt; do echo "== ${f}"; cat "${f}"; done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.pick.outputs.run
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.repo }}
+          path: out
+          retention-days: 30
