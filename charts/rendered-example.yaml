@@ -1,4 +1,21 @@
 ---
+# Source: winterchill/templates/copy.yaml
+# Seals the agent keys the API stores. Set copy.masterKey.existingSecret (key
+# HL_COPY_MASTER_KEY) for anything but the simulator.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: winterchill-hl-copy
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy
+type: Opaque
+stringData:
+  HL_COPY_MASTER_KEY: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+---
 # Source: winterchill/templates/s3-secret.yaml
 apiVersion: v1
 kind: Secret
@@ -14,6 +31,44 @@ stringData:
   AWS_ACCESS_KEY_ID: "minioadmin"
   AWS_SECRET_ACCESS_KEY: "minioadmin"
 
+---
+# Source: winterchill/templates/copy.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: winterchill-hl-copy-web
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy-web
+data:
+  # Same layout as compose/copy-web-nginx.conf: the app, the API under /api/.
+  default.conf: |
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        "" close;
+    }
+    server {
+        listen 8080;
+        root /usr/share/nginx/html;
+        location = / {
+            if ($args = "") {
+                return 302 /?api=/api;
+            }
+            try_files /index.html =404;
+        }
+        location /api/ {
+            proxy_pass http://winterchill-hl-copy:8080/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 1h;
+        }
+    }
 ---
 # Source: winterchill/templates/recorder-configmap.yaml
 apiVersion: v1
@@ -91,6 +146,44 @@ data:
        (delete_after_upload false))))
 
 ---
+# Source: winterchill/templates/copy-leaderboard.yaml
+# Collection directory: raw lines, parquet and leaders.json; `collect` resumes
+# from it, so it outlives the pod.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: winterchill-hl-leaderboard
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-leaderboard
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+# Source: winterchill/templates/copy.yaml
+# Follow configs, sealed agent keys and follow records (API) and journals
+# (engine). Both containers run in one pod, so a ReadWriteOnce volume works.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: winterchill-hl-copy
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
 # Source: winterchill/templates/recorder-pvc.yaml
 # Local buffer: files sit here until the upload command has copied them.
 apiVersion: v1
@@ -147,6 +240,71 @@ spec:
   resources:
     requests:
       storage: 2Gi
+
+---
+# Source: winterchill/templates/copy-leaderboard.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-hl-leaderboard
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-leaderboard
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: hl-leaderboard
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http
+
+---
+# Source: winterchill/templates/copy.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-hl-copy
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: hl-copy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: metrics
+      port: 9930
+      targetPort: metrics
+---
+# Source: winterchill/templates/copy.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: winterchill-hl-copy-web
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy-web
+spec:
+  selector:
+    app.kubernetes.io/instance: winterchill
+    app.kubernetes.io/name: hl-copy-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
 
 ---
 # Source: winterchill/templates/node-exporter.yaml
@@ -371,6 +529,277 @@ spec:
           hostPath: { path: / }
       tolerations:
         - operator: Exists
+---
+# Source: winterchill/templates/copy-leaderboard.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-hl-leaderboard
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-leaderboard
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: hl-leaderboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: hl-leaderboard
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        # Collects and ranks every `interval` seconds; serve re-reads
+        # leaders.json when it changes.
+        - name: collect
+          image: ghcr.io/winterchill-trading/hl-leaderboard:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/bin/tini", "--", "/bin/bash", "-c"]
+          args:
+            - |
+              dir=/var/lib/hl-leaderboard
+              while true; do
+                if hl-leaderboard collect -out "$dir" "$@" \
+                   && hl-leaderboard rank -in "$dir" -out "$dir/leaders.json" -min-trades 1; then
+                  echo "leaderboard ranked"
+                else
+                  echo "leaderboard collect FAILED" >&2
+                fi
+                sleep 60
+              done
+            - collect
+            - "-network"
+            - "local"
+            - "-base-url"
+            - "http://winterchill-hl-sim:3000"
+            - "-min-account-value"
+            - "0"
+            - "-lookback-days"
+            - "1"
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 20m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/hl-leaderboard
+        - name: serve
+          image: ghcr.io/winterchill-trading/hl-leaderboard:local
+          imagePullPolicy: IfNotPresent
+          args: ["serve", "-port", "8090", "-dir", "/var/lib/hl-leaderboard"]
+          ports:
+            - name: http
+              containerPort: 8090
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/hl-leaderboard
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: winterchill-hl-leaderboard
+---
+# Source: winterchill/templates/copy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-hl-copy
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy
+spec:
+  replicas: 1
+  # One engine per follow directory: never two pods placing orders.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: hl-copy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: hl-copy
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: api
+          image: ghcr.io/winterchill-trading/hl-copy-api:local
+          imagePullPolicy: IfNotPresent
+          args:
+            - -port
+            - "8080"
+            - -exchange-url
+            - "http://winterchill-hl-sim:3000"
+            - -leaderboard-url
+            - "http://winterchill-hl-leaderboard:8090"
+            - -engine-url
+            - "http://localhost:9930"
+            - -state-dir
+            - /var/lib/hl-copy/state
+            - -config-dir
+            - /var/lib/hl-copy/configs
+            - -public-url
+            - "http://localhost:8000"
+            - -allow-origin
+            - "http://localhost:8000"
+          envFrom:
+            - secretRef:
+                name: winterchill-hl-copy
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 20m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/hl-copy
+        - name: engine
+          image: ghcr.io/winterchill-trading/hl-copy-engine:local
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - -base-url
+            - "http://winterchill-hl-sim:3000"
+            - -configs-dir
+            - /var/lib/hl-copy/configs
+            - -journal-dir
+            - /var/lib/hl-copy/journals
+            - -port
+            - "9930"
+            - "-unsigned"
+          ports:
+            - name: metrics
+              containerPort: 9930
+          readinessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 20
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 20m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/hl-copy
+      # SIGTERM: the engine cancels and flushes its journals.
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: winterchill-hl-copy
+---
+# Source: winterchill/templates/copy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: winterchill-hl-copy-web
+  labels:
+    app.kubernetes.io/part-of: winterchill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: winterchill
+    helm.sh/chart: winterchill-0.1.0
+    app.kubernetes.io/name: hl-copy-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: winterchill
+      app.kubernetes.io/name: hl-copy-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: winterchill
+        app.kubernetes.io/name: hl-copy-web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+      containers:
+        - name: web
+          image: ghcr.io/winterchill-trading/hl-copy-web:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /index.html, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: winterchill-hl-copy-web
 ---
 # Source: winterchill/templates/recorder-deployment.yaml
 apiVersion: apps/v1
@@ -712,7 +1141,13 @@ spec:
         - name: sim
           image: ghcr.io/winterchill-trading/hl-sim:local
           imagePullPolicy: IfNotPresent
-          args: ["-port", "3000", "-seed", "42"]
+          args:
+            - -port
+            - "3000"
+            - -seed
+            - "42"
+            - "-leaders"
+            - "5"
           ports:
             - name: http
               containerPort: 3000
@@ -759,7 +1194,11 @@ spec:
         - name: sim
           image: ghcr.io/winterchill-trading/binance-sim:local
           imagePullPolicy: IfNotPresent
-          args: ["-port", "3300", "-seed", "42"]
+          args:
+            - -port
+            - "3300"
+            - -seed
+            - "42"
           ports:
             - name: http
               containerPort: 3300
@@ -803,7 +1242,11 @@ spec:
         - name: sim
           image: ghcr.io/winterchill-trading/bybit-sim:local
           imagePullPolicy: IfNotPresent
-          args: ["-port", "3400", "-seed", "42"]
+          args:
+            - -port
+            - "3400"
+            - -seed
+            - "42"
           ports:
             - name: http
               containerPort: 3400
