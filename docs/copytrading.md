@@ -8,7 +8,7 @@ browser wallet only signs.
 ```sh
 make up-copy        # builds the images (first run: long, see local.md), then starts them
 open http://localhost:8000/
-make down
+make down           # containers go, data stays
 ```
 
 Host ports are overridable when something else listens on them (a tunnel on 3000 or
@@ -27,11 +27,20 @@ not matter to the browser.
 | `hl-copy-api` | `hl-copy-api` | Wallet login, agent keys and approvals, follows, leader and status proxy, `/ws`, `/metrics` | 8080 |
 | `hl-copy-engine` | `hl-copy-engine` | One follower per follow file: leader feed, mirroring, IOC orders; `/metrics`, `/status`, `/healthz` | 127.0.0.1:9930 |
 | `hl-copy-web` | `hl-copy-web` (web target) | The js_of_ocaml app on nginx, with the API proxied under `/api/` | 8000 |
+| `postgres` | `postgres:18-alpine` | The `hl_copy` database (and `neobank`); `hl-copy-api` waits for it to be healthy | 127.0.0.1:5432 |
 
 Data lives in three volumes: `leaderboard-data` (the collection), `copy-data` (the API's
 sealed agent keys, follow records and the follow files the engine watches) and
 `copy-journals` (one Bin_prot journal per follow, replayable with
-`hl-copy-engine replay`). `make down` drops them.
+`hl-copy-engine replay`). The `hl_copy` Postgres database is in
+`~/.winterchill/postgres` (`WINTERCHILL_DATA_DIR`, see
+[local.md](local.md#databases)); `hl-copy-api` gets `PGHOST`, `PGUSER`, `PGPASSWORD`,
+`PGDATABASE` and `DATABASE_URL` for it but keeps its state in `copy-data` for now.
+
+All of it survives `make down` and container recreation: follows, approved agents and
+journals are still there on the next `make up-copy`. To start from nothing (a new
+master key, a fresh ranking), `make reset-data CONFIRM=yes` stops the stack and deletes
+the volumes and the Postgres directory.
 
 The first ranking appears after the leaders have traded for a minute or two and one
 collect cycle has run; until then the Leaders page is empty. Check with
@@ -119,6 +128,9 @@ follower lag and slippage. `curl -s localhost:9930/status` shows the same as JSO
 | `HL_SIM_LEADERS` | 5 | Leader accounts in hl-sim |
 | `COPY_EXCHANGE_URL` | `http://hl-sim:3000` | Exchange API root for the API and the engine |
 | `HL_COPY_MASTER_KEY` | development key | Seals agent keys |
+| `PG_PORT` | 5432 | Postgres on 127.0.0.1 |
+| `HL_COPY_DB_PASSWORD` | `hl-copy-dev` | Password of the `hl_copy` role, set once when the data directory is created |
+| `WINTERCHILL_DATA_DIR` | `~/.winterchill` | Host directory holding `postgres/` |
 
 ## Kubernetes
 
@@ -126,7 +138,9 @@ The chart runs the same services when `copy.enabled` (on in `values-dev.yaml`): 
 leaderboard as one pod (collect loop and server), the API and the engine as two
 containers of one pod sharing a volume, and the web app behind a Service. Set
 `copy.masterKey.existingSecret` outside development. After `helm install`,
-`kubectl port-forward svc/<release>-hl-copy-web 8000:8080`.
+`kubectl port-forward svc/<release>-hl-copy-web 8000:8080`. With `postgres.enabled` the
+API container also gets the `hl_copy` connection variables, pointing at
+`<release>-postgres`.
 
 ## The testnet box
 
