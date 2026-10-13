@@ -63,7 +63,8 @@ on any chain, and nothing it signs here is valid on Hyperliquid mainnet.
    registers the agent for your account, then writes the follow file.
 6. **Dashboard.** Within a scan interval (1 s) the engine starts a follower: it mirrors
    the leader's position changes, scaled to your account, as IOC orders. Positions, pnl,
-   pause, resume and stop are on the dashboard and pushed over `/api/ws`.
+   pause, resume and stop are on the dashboard. (The API also pushes them over
+   `/ws?token=...`, proxied as `/api/ws`; the app polls today.)
 
 Without a browser wallet, `scripts/curl-flow.sh` in hl-copy-api walks the same steps
 with a throwaway key: `API=http://localhost:8080 scripts/curl-flow.sh`.
