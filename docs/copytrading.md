@@ -11,6 +11,11 @@ open http://localhost:8000/
 make down
 ```
 
+Host ports are overridable when something else listens on them (a tunnel on 3000 or
+8080 is common): `HL_SIM_PORT=3010 COPY_API_PORT=8180 make up-copy`. The web app's
+`/api/` proxy reaches the API inside the compose network, so the API's host port does
+not matter to the browser.
+
 ## Services
 
 | Service | Image | What it does | Host port |
