@@ -2,6 +2,9 @@
 #
 #   docker buildx build --build-arg REPO=hl-sim --build-arg BIN=hl-sim images/service
 #
+# `--build-arg O3=true` builds the pins and the repo at flambda2 -O3
+# (docs/images.md has the measured difference per binary).
+#
 # The repo is fetched from GitHub at REF, unless a local checkout is passed as
 # the `src` build context (`--build-context src=<dir>`, see build.sh), which is
 # what the Tiltfile does for live rebuilds. Sibling libraries are pinned from GitHub in
@@ -29,6 +32,9 @@ ARG PINS=""
 # Without PINS, siblings track their default branch; change this to refetch
 # them instead of reusing the cached layer.
 ARG PIN_EPOCH=0
+# true compiles the sibling pins and the repo with OCAMLPARAM='_,O3=1'
+# (flambda2 -O3). Libraries already in the base image keep their flags.
+ARG O3=false
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /home/opam/src
 # Dependencies first, from the opam files and the CI pin list only, so a
@@ -38,6 +44,7 @@ COPY --chown=1000:1000 --from=src /.github/workflows/ci.yml ./.github/workflows/
 # Pin siblings exactly as CI does: every `opam pin add <name> <url>` line.
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
     test -n "${REPO}" && test -n "${BIN}" \
+ && if [ "${O3}" = true ]; then export OCAMLPARAM='_,O3=1'; fi \
  && if [ -n "${PINS}" ]; then \
       tr ' ' '\n' <<< "${PINS}" | sed 's/=/ /'; \
     else \
@@ -53,6 +60,7 @@ RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 
  && opam install . --deps-only --yes
 COPY --chown=1000:1000 --from=src / ./
 RUN { git rev-parse --short HEAD 2>/dev/null || echo local; } > /home/opam/revision \
+ && if [ "${O3}" = true ]; then export OCAMLPARAM='_,O3=1'; fi \
  && opam exec -- dune build --release @install \
  && mkdir -p /home/opam/out \
  && cp "_build/install/default/bin/${BIN}" /home/opam/out/service
@@ -61,6 +69,7 @@ RUN { git rev-parse --short HEAD 2>/dev/null || echo local; } > /home/opam/revis
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG REPO
 ARG BIN
+ARG O3=false
 # Core's Time_ns reads /etc/localtime at startup and dies without it, so
 # tzdata is required; services run in UTC.
 ENV TZ=Etc/UTC
@@ -94,7 +103,8 @@ COPY --from=build /home/opam/revision /etc/service-revision
 RUN ln -s /usr/local/bin/service "/usr/local/bin/${BIN}" \
  && ! ldd /usr/local/bin/service | grep 'not found'
 LABEL org.opencontainers.image.source="https://github.com/winterchill-trading/infra" \
-      org.opencontainers.image.title="${REPO}"
+      org.opencontainers.image.title="${REPO}" \
+      io.github.winterchill-trading.o3="${O3}"
 USER 10001:10001
 WORKDIR /var/lib/service
 # tini as PID 1: the kernel drops SIGTERM for a PID 1 without a handler, so
