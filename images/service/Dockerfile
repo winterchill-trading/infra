@@ -36,6 +36,14 @@ ARG PIN_EPOCH=0
 # (flambda2 -O3). Libraries already in the base image keep their flags.
 ARG O3=false
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# C libraries behind opam depexts the base image lacks: hl-client's
+# secp256k1 binding needs libsecp256k1 (pkg-config check in conf-secp256k1).
+USER 0:0
+# hadolint ignore=DL3008
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libsecp256k1-dev \
+ && rm -rf /var/lib/apt/lists/*
+USER 1000:1000
 WORKDIR /home/opam/src
 # Dependencies first, from the opam files and the CI pin list only, so a
 # source change does not reinstall them.
@@ -105,7 +113,7 @@ ARG RUNTIME_PACKAGES=""
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl libffi8 libgmp10 libssl3t64 libzstd1 tini tzdata ${RUNTIME_PACKAGES} \
+      ca-certificates curl libffi8 libgmp10 libsecp256k1-1 libssl3t64 libzstd1 tini tzdata ${RUNTIME_PACKAGES} \
  && rm -rf /var/lib/apt/lists/* \
  && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
  && { userdel -r ubuntu 2>/dev/null || true; } \
