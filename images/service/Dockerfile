@@ -43,7 +43,7 @@ COPY --chown=1000:1000 --from=src /*.opam ./
 COPY --chown=1000:1000 --from=src /.github/workflows/ci.yml ./.github/workflows/ci.yml
 # Pin siblings exactly as CI does: every `opam pin add <name> <url>` line.
 RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
-    test -n "${REPO}" && test -n "${BIN}" \
+    test -n "${REPO}" \
  && if [ "${O3}" = true ]; then export OCAMLPARAM='_,O3=1'; fi \
  && if [ -n "${PINS}" ]; then \
       tr ' ' '\n' <<< "${PINS}" | sed 's/=/ /'; \
@@ -63,13 +63,37 @@ RUN { git rev-parse --short HEAD 2>/dev/null || echo local; } > /home/opam/revis
  && if [ "${O3}" = true ]; then export OCAMLPARAM='_,O3=1'; fi \
  && opam exec -- dune build --release @install \
  && mkdir -p /home/opam/out \
- && cp "_build/install/default/bin/${BIN}" /home/opam/out/service
+ && if [ -n "${BIN}" ]; then cp "_build/install/default/bin/${BIN}" /home/opam/out/service; fi
+
+# Runs one of the repo's benches in the build environment, with the same O3
+# setting as the build; BIN may be empty for a library repo. Used by the
+# o3-compare workflow:
+#
+#   build.sh order-book "" --target bench-out --build-arg O3=true \
+#     --build-arg BENCH='./bench/main.exe -- -quota 2 -ascii' \
+#     --output type=local,dest=out
+FROM build AS bench
+ARG O3=false
+ARG BENCH=""
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN --mount=type=cache,target=/home/opam/.opam/download-cache,uid=1000,gid=1000 \
+    test -n "${BENCH}" \
+ && if [ "${O3}" = true ]; then export OCAMLPARAM='_,O3=1'; fi \
+ && opam install . --deps-only --with-test --yes \
+ && opam exec -- dune build --release @install \
+ && { echo "o3=${O3} $(uname -m) $(nproc) cpus: ${BENCH}"; \
+      eval "opam exec -- dune exec --release ${BENCH}"; } 2>&1 \
+    | tee /home/opam/bench.txt
+
+FROM scratch AS bench-out
+COPY --from=bench /home/opam/bench.txt /
 
 # hadolint ignore=DL3006
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG REPO
 ARG BIN
 ARG O3=false
+RUN test -n "${BIN}"
 # Core's Time_ns reads /etc/localtime at startup and dies without it, so
 # tzdata is required; services run in UTC.
 ENV TZ=Etc/UTC
