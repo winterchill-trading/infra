@@ -102,6 +102,40 @@ services:
       bybit-sim: { condition: service_healthy }
       mm-hyperliquid: { condition: service_started }
 
+  # PostgreSQL, one server for the applications that keep state in SQL
+  # (docs/local.md, "Databases"). Under the `db` profile on its own (`make
+  # up-db`), and pulled in by the `copy` and `neobank` profiles, whose APIs
+  # wait for it to be healthy.
+  #
+  # Data is a bind mount outside the repo, $WINTERCHILL_DATA_DIR/postgres
+  # (default ~/.winterchill/postgres), so it survives `make down` and container
+  # recreation; only `make reset-data CONFIRM=yes` deletes it. initdb.d runs
+  # once, on that empty directory: roles and databases neobank and hl_copy.
+  # The passwords below are development defaults; set them in the environment
+  # for anything shared.
+  postgres:
+    image: postgres:18-alpine
+    profiles: [db, copy, neobank]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      NEOBANK_DB_PASSWORD: ${NEOBANK_DB_PASSWORD:-neobank-dev}
+      HL_COPY_DB_PASSWORD: ${HL_COPY_DB_PASSWORD:-hl-copy-dev}
+    volumes:
+      # Postgres 18 keeps PGDATA in a versioned subdirectory
+      # (/var/lib/postgresql/18/docker), so the mount is the parent: a later
+      # major version gets its own directory next to it for pg_upgrade.
+      - ${WINTERCHILL_DATA_DIR:-${HOME}/.winterchill}/postgres:/var/lib/postgresql
+      - ./postgres/initdb.d:/docker-entrypoint-initdb.d:ro
+    # Loopback only: the databases are for the services on this network.
+    ports: ["127.0.0.1:${PG_PORT:-5432}:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # Copy trading, under the `copy` profile (`make up-copy`, docs/copytrading.md).
   #
   # hl-leaderboard-collect: every LEADERBOARD_INTERVAL seconds collects the
