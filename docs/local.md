@@ -86,8 +86,13 @@ curl -s localhost:3000/info -d '{"type":"meta"}'
 make up     # simulators on 3000/3300/3400, a market maker per venue, MinIO
 make ps     # compose ps, then each service's commit and sibling pins
 make logs
-make down   # also drops the MinIO volume
+make down   # stops and removes the containers; volumes and data stay
 ```
+
+`make down` keeps every named volume (MinIO, the recorder, the copy-trading data)
+and the Postgres directory, so the next `make up` starts where the last one stopped.
+`make reset-data CONFIRM=yes` is the clean slate: it stops the stack and deletes all
+of them (see [Databases](#databases)).
 
 Host ports default to the in-container ones and can be moved when something
 else already listens there: `HL_SIM_PORT`, `BINANCE_SIM_PORT`,
@@ -99,6 +104,60 @@ bucket under `raw/<venue>/<stream>/<symbol>/...` within a minute of `up`.
 MinIO's console is on http://localhost:9001 (`minioadmin` / `minioadmin`);
 `minio-init` creates the `market-data` bucket. Upstream MinIO no longer
 publishes images, so compose uses the community `pgsty/minio` build.
+
+### Databases
+
+One PostgreSQL 18 server (`postgres:18-alpine`) holds the databases of the services
+that keep state in SQL:
+
+| Database | Owner role | Password variable (development default) | Used by |
+| --- | --- | --- | --- |
+| `neobank` | `neobank` | `NEOBANK_DB_PASSWORD` (`neobank-dev`) | `neobank-api` (profile `neobank`) |
+| `hl_copy` | `hl_copy` | `HL_COPY_DB_PASSWORD` (`hl-copy-dev`) | `hl-copy-api` (profile `copy`; not read yet) |
+
+The superuser is `postgres` / `POSTGRES_PASSWORD` (default `postgres`). The defaults
+are for a development machine only; export your own values before the first start
+for anything else.
+
+```sh
+make up-db                      # postgres alone (profile db); make up-copy starts it too
+psql -h 127.0.0.1 -p 5432 -U hl_copy hl_copy          # password hl-copy-dev
+psql -h 127.0.0.1 -p 5432 -U neobank neobank          # password neobank-dev
+docker compose -f compose/docker-compose.yml exec postgres psql -U postgres   # no local psql
+```
+
+The port is published on 127.0.0.1 only; `PG_PORT` moves it when something else
+already listens on 5432 (`PG_PORT=5433 make up-db`). Inside the compose network the
+services reach it as `postgres:5432` and get `PGHOST`, `PGPORT`, `PGUSER`,
+`PGPASSWORD`, `PGDATABASE` and `DATABASE_URL`. `hl-copy-api` and `neobank-api`
+wait for its `pg_isready` healthcheck.
+
+**Where the data lives.** A bind mount outside the repo,
+`$WINTERCHILL_DATA_DIR/postgres`, default `~/.winterchill/postgres` (Postgres 18
+writes its cluster to `18/docker` inside it). It survives `make down`, container
+recreation and image upgrades. To keep it elsewhere, set the variable for every
+make or compose command, e.g. in your shell profile:
+
+```sh
+export WINTERCHILL_DATA_DIR=/Volumes/data/winterchill
+```
+
+**Roles and databases** are created by `compose/postgres/initdb.d/10-databases.sh`,
+which the image runs once, on an empty directory. Changing a password variable later
+does not change an existing role: `ALTER ROLE ... PASSWORD ...`, or start over.
+
+**Starting over.** `make reset-data CONFIRM=yes` stops the stack, removes its named
+volumes (MinIO, recorder, leaderboard, `copy-data`, `copy-journals`) and deletes the
+Postgres directory; without `CONFIRM=yes` it only prints what it would delete. The
+directory is deleted from a throwaway container because on a Linux host its files
+belong to the container's postgres user (uid 70).
+
+In the cluster the chart runs the same server as a StatefulSet when `postgres.enabled`
+(on in `values-dev.yaml`), with a PersistentVolumeClaim (`postgres.persistence.size`,
+5Gi) and the same init script from a ConfigMap. Passwords come from
+`postgres.auth.*` or `postgres.auth.existingSecret` (keys `POSTGRES_PASSWORD`,
+`NEOBANK_DB_PASSWORD`, `HL_COPY_DB_PASSWORD`). The claim `data-<release>-postgres-0`
+outlives `helm uninstall`; delete it by hand to start over.
 
 ### proctopus instead of compose: tried, not adopted
 
@@ -140,7 +199,7 @@ A failed check prints a `FAIL <check> <table> <violations>` line per failing
 assertion, the largest recv_ts gaps, then `day-close check FAILED`; the loop
 keeps running. The check covers every day in `parquet/`, so a gap from a stopped
 stack stays a violation for as long as that day's tables are on the volume; raise
-`DAY_CLOSE_MAX_GAP` above it or drop the volume (`make down`).
+`DAY_CLOSE_MAX_GAP` above it or delete the volumes (`make reset-data CONFIRM=yes`).
 
 ### Socket, FD and RSS collectors
 
