@@ -37,7 +37,9 @@ services:
         <<: *service-args
         REPO: hl-sim
         BIN: hl-sim
-    command: ["-port", "3000", "-seed", "42"]
+    # -leaders: simulated leader accounts for the copy-trading services
+    # (`make up-copy`); they trade against the noise traders and the market maker.
+    command: ["-port", "3000", "-seed", "42", "-leaders", "${HL_SIM_LEADERS:-5}"]
     ports: ["${HL_SIM_PORT:-3000}:3000"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "-d", '{"type":"meta"}', "http://localhost:3000/info"]
