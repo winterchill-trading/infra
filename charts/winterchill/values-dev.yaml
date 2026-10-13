@@ -50,5 +50,10 @@ sims:
   image:
     tag: local
 
+copy:
+  enabled: true
+  image:
+    tag: local
+
 monitoring:
   enabled: true
