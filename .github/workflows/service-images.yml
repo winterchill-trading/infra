@@ -2,7 +2,9 @@ name: service-images
 # Builds the service images from each repo's current main and pushes them to
 # GHCR tagged with the repo commit (first 12 characters), multi-arch. The
 # Helm defaults reference these tags; bump them after a run. The hot
-# binaries are also built with `O3=true` and tagged `<commit12>-o3`
+# binaries are built twice, default flags and `O3=true`: the simulators and
+# the market maker tag the O3 build `<commit12>` and the other `-std`; the
+# recorder and replay keep `<commit12>` for default flags and add `-o3`
 # (docs/images.md).
 on:
   workflow_dispatch:
@@ -39,14 +41,19 @@ jobs:
           all='hl-sim binance-sim bybit-sim market-maker market-recorder market-data market-replay hl-mm hl-leaderboard hl-copy-engine hl-copy-api hl-copy-web'
           # Built twice, default flags and O3=true.
           hot=' market-recorder market-maker hl-sim binance-sim bybit-sim market-replay '
+          # O3 owns the plain <commit12> tag, default flags get -std
+          # (docs/images.md has the measurements behind the choice).
+          o3_default=' market-maker hl-sim binance-sim bybit-sim '
           revs='{}' list='[]'
           for repo in ${REPOS:-$all}; do
             sha=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY_OWNER}/${repo}.git" HEAD | cut -f1)
             test -n "${sha}"
             revs=$(jq -c --arg r "${repo}" --arg s "${sha}" '. + {($r): $s}' <<< "${revs}")
-            list=$(jq -c --arg r "${repo}" '. + [{repo: $r, variant: "default", o3: false, suffix: ""}]' <<< "${list}")
+            std='' o3='-o3'
+            if [[ ${O3} != false && ${o3_default} == *" ${repo} "* ]]; then std='-std' o3=''; fi
+            list=$(jq -c --arg r "${repo}" --arg x "${std}" '. + [{repo: $r, variant: "default", o3: false, suffix: $x}]' <<< "${list}")
             if [[ ${O3} != false && ${hot} == *" ${repo} "* ]]; then
-              list=$(jq -c --arg r "${repo}" '. + [{repo: $r, variant: "o3", o3: true, suffix: "-o3"}]' <<< "${list}")
+              list=$(jq -c --arg r "${repo}" --arg x "${o3}" '. + [{repo: $r, variant: "o3", o3: true, suffix: $x}]' <<< "${list}")
             fi
           done
           echo "revs=${revs}" >> "$GITHUB_OUTPUT"
