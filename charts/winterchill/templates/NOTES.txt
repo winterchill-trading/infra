@@ -7,3 +7,10 @@ Uploads go to {{ include "winterchill.s3Remote" . }}.
 
 Simulators: {{ range .Values.sims.list }}{{ $.Release.Name }}-{{ .name }}:{{ .port }} {{ end }}
 {{- end }}
+{{- if .Values.copy.enabled }}
+
+Copy trading (docs/copytrading.md):
+
+  kubectl port-forward svc/{{ .Release.Name }}-hl-copy-web 8000:8080
+  open http://localhost:8000/
+{{- end }}
