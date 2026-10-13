@@ -299,6 +299,49 @@ services:
     depends_on:
       hl-copy-api: { condition: service_healthy }
 
+  # Neobank, under the `neobank` profile. Placeholders while the neobank-api
+  # and neobank-web repos are being set up: the images follow the same
+  # service-image pattern (images/service/build.sh neobank-api neobank-api,
+  # and the web target for neobank-web), and the command lines are filled in
+  # once the binaries have their flags.
+  #
+  #   docker compose -f compose/docker-compose.yml --profile neobank up -d
+  neobank-api:
+    image: ghcr.io/winterchill-trading/neobank-api:local
+    build:
+      <<: *service-build
+      args:
+        <<: *service-args
+        REPO: neobank-api
+        BIN: neobank-api
+    profiles: [neobank]
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: neobank
+      PGPASSWORD: ${NEOBANK_DB_PASSWORD:-neobank-dev}
+      PGDATABASE: neobank
+      DATABASE_URL: postgres://neobank:${NEOBANK_DB_PASSWORD:-neobank-dev}@postgres:5432/neobank
+    ports: ["${NEOBANK_API_PORT:-8280}:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  neobank-web:
+    image: ghcr.io/winterchill-trading/neobank-web:local
+    build:
+      <<: *service-build
+      target: web
+      args:
+        <<: *service-args
+        REPO: neobank-web
+        BIN: ""
+    profiles: [neobank]
+    restart: unless-stopped
+    ports: ["${NEOBANK_WEB_PORT:-8200}:8080"]
+    depends_on:
+      neobank-api: { condition: service_started }
+
   # Hyperliquid testnet in a box, under the `testnet` profile (`make
   # up-testnet`, docs/testnet-box.md): an hl-sim whose books follow
   # Hyperliquid mainnet's public feed (read-only, no keys), leader accounts,
