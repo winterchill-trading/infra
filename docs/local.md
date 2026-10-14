@@ -112,7 +112,7 @@ that keep state in SQL:
 
 | Database | Owner role | Password variable (development default) | Used by |
 | --- | --- | --- | --- |
-| `neobank` | `neobank` | `NEOBANK_DB_PASSWORD` (`neobank-dev`) | `neobank-api` (profile `neobank`) |
+| `neobank` | `neobank` | `NEOBANK_DB_PASSWORD` (`neobank-dev`) | `neobank-api` (profile `neobank`, [neobank.md](neobank.md)) |
 | `hl_copy` | `hl_copy` | `HL_COPY_DB_PASSWORD` (`hl-copy-dev`) | `hl-copy-api` (profile `copy`): follows, sealed agent keys, approvals |
 
 The superuser is `postgres` / `POSTGRES_PASSWORD` (default `postgres`). The defaults
@@ -162,20 +162,8 @@ outlives `helm uninstall`; delete it by hand to start over.
 
 ### Neobank demo
 
-`make up-neobank` builds `neobank-api` (with `libpq5`) and `neobank-web` (the image's
-`web` target) and starts them with Postgres under the `neobank` profile. The web app
-is on http://localhost:8200/ (`NEOBANK_WEB_PORT`) with the API proxied under `/api/`
-(`compose/neobank-web-nginx.conf`); the API itself is on `NEOBANK_API_PORT` (8280).
-Its fake bank's ledger journal is in the `neobank-state` volume.
-
-The API runs the offline fake provider unless `NEOBANK_PROVIDER=striga`. `STRIGA_*`
-(sandbox credentials) and `NEOBANK_OPS_TOKEN` (enables `/ops/*`) are passed through
-from your shell only when set there; compose has no defaults for them.
-
-The entries follow the two repos' READMEs as of 2026-10-14 and have not been run yet:
-the flags (`-provider`, `-store postgres`, `-state-dir`, `-allow-origin`), the
-`/healthz` probe and the `share/neobank-web` site layout are unverified, and the
-README notes that `-provider striga` is not linked yet.
+`make up-neobank` runs neobank-api and neobank-web on the `neobank` database; see
+[neobank.md](neobank.md).
 
 ### proctopus instead of compose: tried, not adopted
 
