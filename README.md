@@ -9,7 +9,7 @@ OxCaml services (venue simulators, market maker, market recorder).
 | `images/service/` | Generic multi-stage build for one service binary |
 | `compose/` | Local stack: simulators, market maker, recorder, MinIO; PostgreSQL 18 (data in `~/.winterchill/postgres`, [Databases](docs/local.md#databases)) under the `db`, `copy` and `neobank` profiles; cadvisor, node-exporter and Prometheus under the `monitoring` profile; day close plus `market-data check` under `day-close` |
 | `charts/winterchill/` | Helm chart for recorders (optional memtrace), the daily close job with its data-quality check, (optional) node-exporter, copy trading and PostgreSQL |
-| `docs/` | Local (Rancher Desktop) and AWS notes, [recorder upgrade runbook](docs/runbook-recorder-upgrade.md), [troubleshooting](docs/troubleshooting.md), [runtime tuning and memtrace](docs/runtime-tuning.md), [CI](docs/ci.md) |
+| `docs/` | Local (Rancher Desktop) and AWS notes, [copy trading](docs/copytrading.md), [neobank demo](docs/neobank.md), [recorder upgrade runbook](docs/runbook-recorder-upgrade.md), [troubleshooting](docs/troubleshooting.md), [runtime tuning and memtrace](docs/runtime-tuning.md), [CI](docs/ci.md) |
 | `.github/workflows/obj-magic.yml` | Reusable workflow: `check-obj-magic.sh` over the calling repo, one `uses:` line ([docs/ci.md](docs/ci.md#objmagic-check)) |
 | `.github/actions/ox-setup/` | Composite action for repo CI: OxCaml switch, sibling pins and dependencies, cached as one switch ([docs/ci.md](docs/ci.md)) |
 | `scripts/check-pins.sh` | Checks each repo's CI pins against the sibling `dune-project` files, and its ox repository commit against the base image (`make pins`) |
