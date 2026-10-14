@@ -25,7 +25,7 @@ DUCKDB_VERSION ?= 1.5.6
 # Images of the `copy` and `testnet` profiles, built only by their targets.
 # hl-copy-web is the Dockerfile's web target (a static site, no binary).
 COPY_SERVICES := hl-sim:hl-sim market-maker:market-maker hl-leaderboard:hl-leaderboard \
-	hl-copy-engine:hl-copy-engine hl-copy-api:hl-copy-api
+	hl-copy-engine:hl-copy-engine hl-copy-api:hl-copy-api:libpq5
 TESTNET_SERVICES := hl-sim:hl-sim hl-mm:hl-mm market-recorder:market-recorder:rclone
 
 # $(call build-images,repo:binary[:runtime packages] ...)
