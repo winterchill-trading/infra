@@ -767,8 +767,9 @@ spec:
           envFrom:
             - secretRef:
                 name: winterchill-hl-copy
-          # The hl_copy database. The API does not read these yet (its state is
-          # on the volume); they are here for when it does.
+          # The hl_copy database: follows, sealed agent keys and approvals. The
+          # chart's Postgres has no TLS, which pg-async requires unless the URL
+          # says sslmode=disable.
           env:
             - name: PGHOST
               value: winterchill-postgres
@@ -784,7 +785,7 @@ spec:
                   name: winterchill-postgres
                   key: HL_COPY_DB_PASSWORD
             - name: DATABASE_URL
-              value: "postgres://hl_copy:$(PGPASSWORD)@winterchill-postgres:5432/hl_copy"
+              value: "postgres://hl_copy:$(PGPASSWORD)@winterchill-postgres:5432/hl_copy?sslmode=disable"
           ports:
             - name: http
               containerPort: 8080

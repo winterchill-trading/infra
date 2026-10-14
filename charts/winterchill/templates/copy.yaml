@@ -91,8 +91,9 @@ spec:
             - secretRef:
                 name: {{ $secret }}
           {{- if .Values.postgres.enabled }}
-          # The hl_copy database. The API does not read these yet (its state is
-          # on the volume); they are here for when it does.
+          # The hl_copy database: follows, sealed agent keys and approvals. The
+          # chart's Postgres has no TLS, which pg-async requires unless the URL
+          # says sslmode=disable.
           env:
             - name: PGHOST
               value: {{ .Release.Name }}-postgres
@@ -108,7 +109,7 @@ spec:
                   name: {{ .Values.postgres.auth.existingSecret | default (printf "%s-postgres" .Release.Name) }}
                   key: HL_COPY_DB_PASSWORD
             - name: DATABASE_URL
-              value: "postgres://hl_copy:$(PGPASSWORD)@{{ .Release.Name }}-postgres:{{ .Values.postgres.port }}/hl_copy"
+              value: "postgres://hl_copy:$(PGPASSWORD)@{{ .Release.Name }}-postgres:{{ .Values.postgres.port }}/hl_copy?sslmode=disable"
           {{- end }}
           ports:
             - name: http
