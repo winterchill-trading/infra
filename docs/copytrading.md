@@ -27,15 +27,17 @@ not matter to the browser.
 | `hl-copy-api` | `hl-copy-api` | Wallet login, agent keys and approvals, follows, leader and status proxy, `/ws`, `/metrics` | 8080 |
 | `hl-copy-engine` | `hl-copy-engine` | One follower per follow file: leader feed, mirroring, IOC orders; `/metrics`, `/status`, `/healthz` | 127.0.0.1:9930 |
 | `hl-copy-web` | `hl-copy-web` (web target) | The js_of_ocaml app on nginx, with the API proxied under `/api/` | 8000 |
-| `postgres` | `postgres:18-alpine` | The `hl_copy` database (and `neobank`); `hl-copy-api` waits for it to be healthy | 127.0.0.1:5432 |
+| `postgres` | `postgres:18-alpine` | The `hl_copy` database (and `neobank`): the API's follows, agent keys and approvals; `hl-copy-api` waits for it to be healthy | 127.0.0.1:5432 |
 
 Data lives in three volumes: `leaderboard-data` (the collection), `copy-data` (the API's
 sealed agent keys, follow records and the follow files the engine watches) and
 `copy-journals` (one Bin_prot journal per follow, replayable with
-`hl-copy-engine replay`). The `hl_copy` Postgres database is in
-`~/.winterchill/postgres` (`WINTERCHILL_DATA_DIR`, see
-[local.md](local.md#databases)); `hl-copy-api` gets `PGHOST`, `PGUSER`, `PGPASSWORD`,
-`PGDATABASE` and `DATABASE_URL` for it but keeps its state in `copy-data` for now.
+`hl-copy-engine replay`). The API's records (follows, sealed agent keys, builder fee
+approvals) are in the `hl_copy` Postgres database, in `~/.winterchill/postgres`
+(`WINTERCHILL_DATA_DIR`, see [local.md](local.md#databases)), reached through
+`DATABASE_URL` with `?sslmode=disable` (the local server has no TLS). The database is
+the record; at startup the API rewrites the engine's files in `copy-data` from it. A
+`copy-data` volume from before the database is imported once on the first start.
 
 All of it survives `make down` and container recreation: follows, approved agents and
 journals are still there on the next `make up-copy`. To start from nothing (a new
