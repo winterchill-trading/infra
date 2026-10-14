@@ -21,7 +21,7 @@ Workspace-wide rules, the repository map and the CI model are in
 | `docs/` | Local and AWS notes, copy trading, the neobank demo, the recorder runbook, CI, images ([docs/AGENTS.md](docs/AGENTS.md)) |
 | `scripts/` | `check-pins.sh` (CI pins against `dune-project`), `ps.sh`, `gc-compare.sh` |
 | `test-actions/` | Chaos checks against a running local stack: orders, recorder restart, network cut, upload outage |
-| `Makefile` | Every operator and CI entry point (`make help` lists them) |
+| `Makefile` | Every operator and CI entry point; each target's `##` comment says what it does |
 | `Tiltfile` | Live rebuild of service images on a local Kubernetes cluster |
 
 ## Build, test, docs
@@ -75,8 +75,8 @@ Never poll in a loop.
 
 ## Pitfalls
 
-- Core's `Time_ns` fails at startup without local time data. Runtime images need `tzdata` and a UTC
-  setting.
+- Core's `Time_ns` fails at startup without local time data. Runtime images need `tzdata` and a
+  localtime setting.
 - An Async binary running as PID 1 ignores SIGTERM. Run it under `tini`, or pods wait out the grace
   period.
 - `RUN git clone` layers are cached forever. Use `ADD` with a ref to re-check the remote, and bump the
