@@ -113,7 +113,7 @@ that keep state in SQL:
 | Database | Owner role | Password variable (development default) | Used by |
 | --- | --- | --- | --- |
 | `neobank` | `neobank` | `NEOBANK_DB_PASSWORD` (`neobank-dev`) | `neobank-api` (profile `neobank`) |
-| `hl_copy` | `hl_copy` | `HL_COPY_DB_PASSWORD` (`hl-copy-dev`) | `hl-copy-api` (profile `copy`; not read yet) |
+| `hl_copy` | `hl_copy` | `HL_COPY_DB_PASSWORD` (`hl-copy-dev`) | `hl-copy-api` (profile `copy`): follows, sealed agent keys, approvals |
 
 The superuser is `postgres` / `POSTGRES_PASSWORD` (default `postgres`). The defaults
 are for a development machine only; export your own values before the first start
@@ -128,9 +128,10 @@ docker compose -f compose/docker-compose.yml exec postgres psql -U postgres   # 
 
 The port is published on 127.0.0.1 only; `PG_PORT` moves it when something else
 already listens on 5432 (`PG_PORT=5433 make up-db`). Inside the compose network the
-services reach it as `postgres:5432` and get `PGHOST`, `PGPORT`, `PGUSER`,
-`PGPASSWORD`, `PGDATABASE` and `DATABASE_URL`. `hl-copy-api` and `neobank-api`
-wait for its `pg_isready` healthcheck.
+services reach it as `postgres:5432` through `DATABASE_URL`, which ends in
+`?sslmode=disable`: pg-async requires TLS otherwise, and this server has none.
+`hl-copy-api` and `neobank-api` wait for its `pg_isready` healthcheck; their images
+carry `libpq5` (`RUNTIME_PACKAGES`), the build stage has `libpq-dev`.
 
 **Where the data lives.** A bind mount outside the repo,
 `$WINTERCHILL_DATA_DIR/postgres`, default `~/.winterchill/postgres` (Postgres 18
@@ -158,6 +159,23 @@ In the cluster the chart runs the same server as a StatefulSet when `postgres.en
 `postgres.auth.*` or `postgres.auth.existingSecret` (keys `POSTGRES_PASSWORD`,
 `NEOBANK_DB_PASSWORD`, `HL_COPY_DB_PASSWORD`). The claim `data-<release>-postgres-0`
 outlives `helm uninstall`; delete it by hand to start over.
+
+### Neobank demo
+
+`make up-neobank` builds `neobank-api` (with `libpq5`) and `neobank-web` (the image's
+`web` target) and starts them with Postgres under the `neobank` profile. The web app
+is on http://localhost:8200/ (`NEOBANK_WEB_PORT`) with the API proxied under `/api/`
+(`compose/neobank-web-nginx.conf`); the API itself is on `NEOBANK_API_PORT` (8280).
+Its fake bank's ledger journal is in the `neobank-state` volume.
+
+The API runs the offline fake provider unless `NEOBANK_PROVIDER=striga`. `STRIGA_*`
+(sandbox credentials) and `NEOBANK_OPS_TOKEN` (enables `/ops/*`) are passed through
+from your shell only when set there; compose has no defaults for them.
+
+The entries follow the two repos' READMEs as of 2026-10-14 and have not been run yet:
+the flags (`-provider`, `-store postgres`, `-state-dir`, `-allow-origin`), the
+`/healthz` probe and the `share/neobank-web` site layout are unverified, and the
+README notes that `-provider striga` is not linked yet.
 
 ### proctopus instead of compose: tried, not adopted
 
