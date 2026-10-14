@@ -297,13 +297,15 @@ services:
     depends_on:
       hl-copy-api: { condition: service_healthy }
 
-  # Neobank, under the `neobank` profile. Placeholders while the neobank-api
-  # and neobank-web repos are being set up: the images follow the same
-  # service-image pattern (images/service/build.sh neobank-api neobank-api,
-  # and the web target for neobank-web), and the command lines are filled in
-  # once the binaries have their flags.
+  # Neobank, under the `neobank` profile (`make up-neobank`, docs/local.md):
+  # neobank-api on the neobank database, neobank-web (the image's web target)
+  # on nginx with the API under /api. Written against the two repos' READMEs
+  # while they are being built; flags may still move.
   #
-  #   docker compose -f compose/docker-compose.yml --profile neobank up -d
+  # neobank-api: the fake provider by default (offline, no credentials).
+  # NEOBANK_PROVIDER=striga selects Striga's sandbox; the STRIGA_* variables
+  # and NEOBANK_OPS_TOKEN (enables /ops/*) are passed through from your
+  # environment only when set there, never with defaults.
   neobank-api:
     image: ghcr.io/winterchill-trading/neobank-api:local
     build:
@@ -312,19 +314,43 @@ services:
         <<: *service-args
         REPO: neobank-api
         BIN: neobank-api
+        RUNTIME_PACKAGES: libpq5
     profiles: [neobank]
     restart: unless-stopped
     environment:
-      PGHOST: postgres
-      PGPORT: "5432"
-      PGUSER: neobank
-      PGPASSWORD: ${NEOBANK_DB_PASSWORD:-neobank-dev}
-      PGDATABASE: neobank
-      DATABASE_URL: postgres://neobank:${NEOBANK_DB_PASSWORD:-neobank-dev}@postgres:5432/neobank
+      # pg-async requires TLS unless the URL says sslmode=disable, and this
+      # Postgres has no TLS (it is reachable on the compose network only).
+      - DATABASE_URL=postgres://neobank:${NEOBANK_DB_PASSWORD:-neobank-dev}@postgres:5432/neobank?sslmode=disable
+      - NEOBANK_OPS_TOKEN
+      - STRIGA_API_KEY
+      - STRIGA_API_SECRET
+      - STRIGA_APPLICATION_ID
+      - STRIGA_BASE_URL
+      - STRIGA_UI_SECRET
+    command:
+      - -port
+      - "8080"
+      - -provider
+      - ${NEOBANK_PROVIDER:-fake}
+      - -store
+      - postgres
+      # The fake bank's ledger journal.
+      - -state-dir
+      - /var/lib/neobank-api/state
+      - -allow-origin
+      - http://localhost:${NEOBANK_WEB_PORT:-8200}
+    volumes:
+      - neobank-state:/var/lib/neobank-api
     ports: ["${NEOBANK_API_PORT:-8280}:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 5s
+      retries: 20
     depends_on:
       postgres: { condition: service_healthy }
 
+  # neobank-web: with no query the app calls /api on its own origin, which
+  # neobank-web-nginx.conf proxies to neobank-api. Open http://localhost:8200/.
   neobank-web:
     image: ghcr.io/winterchill-trading/neobank-web:local
     build:
@@ -336,9 +362,11 @@ services:
         BIN: ""
     profiles: [neobank]
     restart: unless-stopped
+    volumes:
+      - ./neobank-web-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports: ["${NEOBANK_WEB_PORT:-8200}:8080"]
     depends_on:
-      neobank-api: { condition: service_started }
+      neobank-api: { condition: service_healthy }
 
   # Hyperliquid testnet in a box, under the `testnet` profile (`make
   # up-testnet`, docs/testnet-box.md): an hl-sim whose books follow
@@ -578,3 +606,4 @@ volumes:
   copy-data:
   copy-journals:
   testnet-recorder-data:
+  neobank-state:
