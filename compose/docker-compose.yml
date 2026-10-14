@@ -299,8 +299,7 @@ services:
 
   # Neobank, under the `neobank` profile (`make up-neobank`, docs/local.md):
   # neobank-api on the neobank database, neobank-web (the image's web target)
-  # on nginx with the API under /api. Written against the two repos' READMEs
-  # while they are being built; flags may still move.
+  # on nginx with the API under /api (docs/neobank.md).
   #
   # neobank-api: the fake provider by default (offline, no credentials).
   # NEOBANK_PROVIDER=striga selects Striga's sandbox; the STRIGA_* variables
@@ -365,6 +364,11 @@ services:
     volumes:
       - ./neobank-web-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports: ["${NEOBANK_WEB_PORT:-8200}:8080"]
+    # Through the proxy: healthy means the site and the API behind /api/.
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/healthz"]
+      interval: 5s
+      retries: 20
     depends_on:
       neobank-api: { condition: service_healthy }
 
