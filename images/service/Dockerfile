@@ -38,11 +38,13 @@ ARG PIN_EPOCH=0
 ARG O3=false
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # C libraries behind opam depexts the base image lacks: hl-client's
-# secp256k1 binding needs libsecp256k1 (pkg-config check in conf-secp256k1).
+# secp256k1 binding needs libsecp256k1 (pkg-config check in conf-secp256k1),
+# pg-async links libpq (the runtime image then needs libpq5, passed as
+# RUNTIME_PACKAGES by the services that use it).
 USER 0:0
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libsecp256k1-dev \
+ && apt-get install -y --no-install-recommends libpq-dev libsecp256k1-dev \
  && rm -rf /var/lib/apt/lists/*
 USER 1000:1000
 WORKDIR /home/opam/src
