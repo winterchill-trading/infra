@@ -12,7 +12,7 @@ ALL_PROFILES := --profile monitoring --profile day-close --profile copy --profil
 	--profile db --profile neobank
 
 .PHONY: base build build-day-close build-copy build-neobank build-testnet up up-monitoring up-day-close \
-	up-copy up-neobank up-testnet up-db up-memtrace memtrace-pull down reset-data logs ps lint chart pins
+	up-copy up-neobank up-testnet up-db reset-neobank up-memtrace memtrace-pull down reset-data logs ps lint chart pins
 
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
@@ -75,6 +75,24 @@ up-copy: build-copy ## copy trading on hl-sim, web app on :8000 (docs/copytradin
 up-neobank: build-neobank ## neobank demo on postgres, web app on :8200 (docs/local.md)
 	mkdir -p $(PG_DATA_DIR)
 	$(COMPOSE) --profile neobank up -d postgres neobank-api neobank-web
+
+# The fake bank's journal (neobank-state) and the neobank database describe the
+# same customers: the fake numbers its customers from its journal, so a fresh
+# journal over an old database collides on provider_ref (cus_000001). Reset
+# the two together; hl_copy and the other volumes are left alone.
+reset-neobank: ## DELETE the neobank database and the neobank-state volume (CONFIRM=yes)
+	@if [ "$(CONFIRM)" != yes ]; then \
+	  echo "reset-neobank drops the neobank database and the neobank-state volume."; \
+	  echo "Run: make reset-neobank CONFIRM=yes"; exit 1; \
+	fi
+	$(COMPOSE) --profile neobank rm -sf neobank-web neobank-api
+	docker volume rm -f winterchill_neobank-state
+	mkdir -p $(PG_DATA_DIR)
+	$(COMPOSE) --profile db up -d --wait postgres
+	$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U postgres -d postgres \
+	  -c 'DROP DATABASE IF EXISTS neobank WITH (FORCE)' \
+	  -c 'CREATE DATABASE neobank OWNER neobank' \
+	  -c 'REVOKE ALL ON DATABASE neobank FROM PUBLIC'
 
 up-db: ## postgres alone, data in $(WINTERCHILL_DATA_DIR)/postgres (docs/local.md)
 	mkdir -p $(PG_DATA_DIR)
