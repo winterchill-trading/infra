@@ -11,8 +11,8 @@ PG_DATA_DIR := $(WINTERCHILL_DATA_DIR)/postgres
 ALL_PROFILES := --profile monitoring --profile day-close --profile copy --profile testnet \
 	--profile db --profile neobank
 
-.PHONY: base build build-day-close build-copy build-testnet up up-monitoring up-day-close \
-	up-copy up-testnet up-db up-memtrace memtrace-pull down reset-data logs ps lint chart pins
+.PHONY: base build build-day-close build-copy build-neobank build-testnet up up-monitoring up-day-close \
+	up-copy up-neobank up-testnet up-db up-memtrace memtrace-pull down reset-data logs ps lint chart pins
 
 base: ## build the OxCaml base image for the host architecture
 	docker buildx build --load -t $(BASE_IMAGE) images/oxcaml-base
@@ -26,6 +26,7 @@ DUCKDB_VERSION ?= 1.5.6
 # hl-copy-web is the Dockerfile's web target (a static site, no binary).
 COPY_SERVICES := hl-sim:hl-sim market-maker:market-maker hl-leaderboard:hl-leaderboard \
 	hl-copy-engine:hl-copy-engine hl-copy-api:hl-copy-api:libpq5
+NEOBANK_SERVICES := neobank-api:neobank-api:libpq5
 TESTNET_SERVICES := hl-sim:hl-sim hl-mm:hl-mm market-recorder:market-recorder:rclone
 
 # $(call build-images,repo:binary[:runtime packages] ...)
@@ -43,6 +44,10 @@ build: ## build every service image in the compose stack, labelled with its comm
 build-copy: ## build the copy-trading images (and hl-sim, market-maker)
 	$(call build-images,$(COPY_SERVICES))
 	BASE_IMAGE=$(BASE_IMAGE) images/service/build.sh hl-copy-web "" --target web
+
+build-neobank: ## build the neobank images (API and the web target)
+	$(call build-images,$(NEOBANK_SERVICES))
+	BASE_IMAGE=$(BASE_IMAGE) images/service/build.sh neobank-web "" --target web
 
 build-testnet: ## build the testnet box images
 	$(call build-images,$(TESTNET_SERVICES))
@@ -66,6 +71,10 @@ COPY_UP := postgres hl-sim mm-hyperliquid hl-leaderboard-collect hl-leaderboard 
 up-copy: build-copy ## copy trading on hl-sim, web app on :8000 (docs/copytrading.md)
 	mkdir -p $(PG_DATA_DIR)
 	$(COMPOSE) --profile copy up -d $(COPY_UP)
+
+up-neobank: build-neobank ## neobank demo on postgres, web app on :8200 (docs/local.md)
+	mkdir -p $(PG_DATA_DIR)
+	$(COMPOSE) --profile neobank up -d postgres neobank-api neobank-web
 
 up-db: ## postgres alone, data in $(WINTERCHILL_DATA_DIR)/postgres (docs/local.md)
 	mkdir -p $(PG_DATA_DIR)
